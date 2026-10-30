@@ -133,6 +133,16 @@ a.karte:hover,button.karte:hover{border-color:var(--royal)}
 .probe-aufgabe .pkt{float:right;color:var(--ink-soft);font-size:.9rem}
 .linien{margin-top:8px;height:calc(var(--z,3) * 34px);background:repeating-linear-gradient(transparent 0 33px,var(--line) 33px 34px)}
 .uhr{font-family:var(--font-display);font-size:2.2rem;font-weight:800;color:var(--royal)}
+.uhr-leiste{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--royal-soft);border:2px solid var(--royal);border-radius:14px;padding:10px 14px;margin:12px 0}
+.uhr-leiste .uhr{min-width:4.5ch}
+.uhr-leiste .uhr-text{flex:1;min-width:160px;font-weight:600}
+.uhr-leiste.knapp{background:var(--hl-yellow);border-color:#9a7400}
+.uhr-leiste.vorbei{background:var(--red-soft);border-color:var(--red)}
+.uhr-leiste.vorbei .uhr{color:var(--red)}
+.profi{background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:10px 14px;margin:10px 0}
+.profi summary{cursor:pointer;font-weight:700}
+.profi ul{margin:8px 0 0;padding-left:20px}
+[hidden]{display:none!important}
 .korrektur{background:var(--card);border:1.5px solid var(--line);border-left:8px solid var(--red);border-radius:6px 14px 14px 6px;padding:14px 16px;margin-bottom:12px}
 
 /* Bericht */
@@ -212,7 +222,7 @@ function linkZu(t, ziel) {
   // ziel: "quiz:id", "karten:id", "ueben:id", "merk", "probe"
   const [art, id] = String(ziel).split(":");
   if (art === "merk") return `#/t/${t.id}/merk`;
-  if (art === "probe") return `#/t/${t.id}/probe`;
+  if (art === "probe") return id ? `#/t/${t.id}/probe/${id}` : `#/t/${t.id}/probe`;
   return `#/t/${t.id}/${art}/${id}`;
 }
 
@@ -247,7 +257,7 @@ function seiteStart() {
 // ---------- Thema ----------
 const REITER = [["plan", "Lernplan"], ["merk", "Merkzettel"], ["quiz", "Quiz"], ["karten", "Karteikarten"], ["ueben", "Üben"], ["probe", "Probeklausur"], ["korrektur", "Korrekturen"]];
 function themaKopf(t, aktiv) {
-  const vorhanden = { plan: t.lernplan?.length, merk: t.merkzettel?.length, quiz: t.quizze?.length, karten: t.karten?.length, ueben: t.uebungen?.length, probe: !!t.probeklausur, korrektur: t.korrekturen?.length };
+  const vorhanden = { plan: t.lernplan?.length, merk: t.merkzettel?.length, quiz: t.quizze?.length, karten: t.karten?.length, ueben: t.uebungen?.length, probe: proben(t).length, korrektur: t.korrekturen?.length };
   const tb = t.klausur ? tageBis(t.klausur) : null;
   return `<a class="zurueck" href="#/">‹ Meine Lernmappe</a>
     <div><span class="chip c-${esc(t.farbe || "grau")}">${esc(t.fach)}</span></div>
@@ -441,35 +451,125 @@ function seiteUeben(t, uid) {
   zeige();
 }
 
-// ---------- Probeklausur ----------
+// ---------- Probeklausur: Klassenarbeit unter Zeit simulieren ----------
 let uhrTimer = null;
-function seiteProbe(t) {
-  const p = t.probeklausur;
-  if (!p) return seitePlan(t);
+const proben = (t) => t.probeklausuren || (t.probeklausur ? [t.probeklausur] : []);
+const probeKey = (t, n) => `${t.id}/${n}`;
+const mmss = (s) => `${Math.floor(Math.abs(s) / 60)}:${String(Math.abs(s) % 60).padStart(2, "0")}`;
+const minutenText = (n) => n === 1 ? "eine Minute" : `${n} Minuten`;
+// Kurzer Ton über WebAudio (keine Datei nötig). Beim Start einmal mit 0 aufrufen, damit Safari den Ton später erlaubt.
+function piep(anzahl) {
+  try {
+    const C = window.AudioContext || window.webkitAudioContext;
+    if (!C) return;
+    const ac = piep.ac || (piep.ac = new C());
+    if (ac.state === "suspended") ac.resume();
+    for (let i = 0; i < anzahl; i++) {
+      const o = ac.createOscillator(), g = ac.createGain(), t0 = ac.currentTime + i * 0.4;
+      o.frequency.value = 880;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.25, t0 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.3);
+      o.connect(g); g.connect(ac.destination);
+      o.start(t0); o.stop(t0 + 0.32);
+    }
+  } catch (_) {}
+}
+function probeStatus(t, n) {
+  const p = proben(t)[n - 1];
+  const r = S.probe[probeKey(t, n)] || (n === 1 ? S.probe[t.id] : null);
+  if (!p || !r) return "";
+  if (r.fertig) return `geschrieben am ${new Date(r.fertig).toLocaleDateString("de-DE")}, ${r.minuten} von ${p.dauer || 30} Minuten ${r.inZeit ? "(in der Zeit)" : "(Zeit überschritten)"}`;
+  return `angefangen am ${new Date(r.gestartet).toLocaleDateString("de-DE")}, nicht beendet`;
+}
+function seiteProbe(t, nrText) {
+  const liste = proben(t);
+  if (!liste.length) return seitePlan(t);
+  if (!nrText && liste.length > 1) {
+    app().innerHTML = themaKopf(t, "probe") + `
+      <p>Hier übst du die Klassenarbeit wie in echt: auf Papier, ohne Hilfe und mit der Uhr.</p>
+      <div class="raster">${liste.map((p, i) => `<a class="karte" href="#/t/${t.id}/probe/${i + 1}">
+        <span class="titel">${esc(p.titel)}</span><span class="leise">⏱️ ${p.dauer || 30} Minuten</span>
+        <small class="leise">${esc(probeStatus(t, i + 1)) || "Noch nicht geschrieben"}</small></a>`).join("")}</div>`;
+    return;
+  }
+  const n = Math.min(Math.max(parseInt(nrText, 10) || 1, 1), liste.length);
+  const p = liste[n - 1], key = probeKey(t, n), minuten = p.dauer || 30, dauer = minuten * 60;
   const summe = p.aufgaben.reduce((s, a) => s + (a.punkte || 0), 0);
+  const zuletzt = probeStatus(t, n);
   app().innerHTML = themaKopf(t, "probe") + `
     <div class="nicht-drucken">
-      <p>${fmt(p.hinweis || "Nimm dir ein Blatt, stell den Wecker und arbeite ohne Hilfe. Wenn du fertig bist, gib das Blatt Papa. Er macht ein Foto, und Claude korrigiert es.")}</p>
-      <div class="knoepfe"><button class="btn" id="start">⏱️ ${p.dauer || 30} Minuten starten</button><button class="btn hell" id="druck">🖨️ Drucken</button></div>
-      <p class="uhr" id="uhr" hidden></p>
+      ${liste.length > 1 ? `<a class="zurueck" href="#/t/${t.id}/probe">‹ Alle Probeklausuren</a>` : ""}
+      <p>${fmt(p.hinweis || "Nimm dir ein Blatt, stell die Uhr und arbeite ohne Hilfe. Wenn du fertig bist, gib das Blatt Papa. Er macht ein Foto, und Claude korrigiert es.")}</p>
+      <details class="profi"><summary>🎯 Profi-Tricks für die Klassenarbeit</summary><ul>
+        <li>Lies zuerst <b>alle</b> Aufgaben kurz durch.</li>
+        <li>Fang mit dem an, was du sicher kannst. Das bringt schnelle Punkte.</li>
+        <li>Du hängst fest? Mach erst weiter und komm später zurück.</li>
+        <li>Zur Halbzeit solltest du ungefähr in der Mitte sein.</li>
+        <li>Heb dir die letzten 5 Minuten zum Kontrollieren auf.</li></ul></details>
+      <div class="knoepfe"><button class="btn" id="start">⏱️ ${minuten} Minuten starten</button><button class="btn hell" id="druck">🖨️ Drucken</button></div>
+      <div id="probe-ergebnis"></div>
+      ${zuletzt ? `<p class="leise klein">Zuletzt: ${esc(zuletzt)}</p>` : ""}
     </div>
+    <div class="uhr-leiste nicht-drucken" id="leiste" hidden><span class="uhr" id="uhr"></span><span class="uhr-text" id="uhr-text"></span><button class="btn gut" id="fertig">✋ Ich bin fertig</button></div>
     <h2>${esc(p.titel)}</h2>
-    <p class="leise">Name: ${esc(KIND.name)} · Zeit: ${p.dauer || 30} Minuten · ${summe} Punkte</p>
+    <p class="leise">Name: ${esc(KIND.name)} · Zeit: ${minuten} Minuten · ${summe} Punkte</p>
     ${p.aufgaben.map((a, i) => `<div class="probe-aufgabe"><span class="pkt">${a.punkte} P.</span><span class="nr">Aufgabe ${i + 1}</span><p>${fmt(a.text)}</p>${a.zeilen ? `<div class="linien" style="--z:${a.zeilen}"></div>` : ""}</div>`).join("")}`;
+
+  const lauf = () => {
+    clearInterval(uhrTimer);
+    const r = S.probe[key];
+    $("#leiste").hidden = false;
+    $("#start").hidden = true;
+    const start = Math.floor((Date.now() - r.gestartet) / 1000);
+    let gewarnt = start >= dauer - 300, vorbei = start >= dauer;
+    const tick = () => {
+      const leiste = $("#leiste");
+      if (!leiste) return clearInterval(uhrTimer);
+      const vergangen = Math.floor((Date.now() - r.gestartet) / 1000), rest = dauer - vergangen;
+      $("#uhr").textContent = rest >= 0 ? mmss(rest) : "+" + mmss(rest);
+      leiste.classList.toggle("knapp", rest > 0 && rest <= 300);
+      leiste.classList.toggle("vorbei", rest <= 0);
+      $("#uhr-text").textContent = rest <= 0 ? "Zeit ist um! Stift weg ✋ Dann tipp auf „Ich bin fertig“."
+        : rest <= 300 ? "Noch 5 Minuten: Kontrollier deine Antworten. 🔍"
+        : vergangen >= dauer / 2 ? "Halbzeit! Bist du ungefähr in der Mitte?"
+        : "Du schaffst das! 💪";
+      if (!gewarnt && rest <= 300 && dauer > 600) { gewarnt = true; piep(1); }
+      if (!vorbei && rest <= 0) { vorbei = true; piep(3); }
+    };
+    tick();
+    uhrTimer = setInterval(tick, 1000);
+    $("#fertig").onclick = () => {
+      clearInterval(uhrTimer);
+      const sek = Math.floor((Date.now() - r.gestartet) / 1000);
+      r.fertig = Date.now();
+      r.minuten = Math.max(1, Math.round(sek / 60));
+      r.inZeit = sek <= dauer + 30;
+      merke(`${t.titel}: Probeklausur „${p.titel}“ in ${r.minuten} von ${minuten} Minuten ${r.inZeit ? "geschafft" : "(Zeit überschritten)"}`);
+      speichern();
+      $("#leiste").hidden = true;
+      $("#start").hidden = false;
+      $("#start").textContent = "⏱️ Nochmal starten";
+      $("#probe-ergebnis").innerHTML = r.inZeit
+        ? `<div class="erkl gut"><b>Geschafft in ${r.minuten} von ${minuten} Minuten! 🎉</b><br>Gib das Blatt Papa. Er macht ein Foto, und Claude korrigiert es.</div>`
+        : `<div class="erkl"><b>Du hast ${minutenText(r.minuten - minuten)} länger gebraucht.</b><br>Das ist beim Üben ganz normal. Gib das Blatt trotzdem Papa. Beim nächsten Mal helfen dir die Profi-Tricks.</div>`;
+      toast("Gut gemacht! ✏️");
+      window.scrollTo(0, 0);
+    };
+  };
+
   $("#druck").addEventListener("click", () => window.print());
   $("#start").addEventListener("click", () => {
-    clearInterval(uhrTimer);
-    let rest = (p.dauer || 30) * 60;
-    S.probe[t.id] = { gestartet: Date.now() };
-    merke(`${t.titel}: Probeklausur gestartet`);
-    const uhr = $("#uhr"); uhr.hidden = false;
-    const tick = () => {
-      if (!document.body.contains(uhr)) return clearInterval(uhrTimer);
-      uhr.textContent = rest > 0 ? `${Math.floor(rest / 60)}:${String(rest % 60).padStart(2, "0")}` : "Zeit ist um! Stift weg ✋";
-      rest--; if (rest < -1) clearInterval(uhrTimer);
-    };
-    tick(); uhrTimer = setInterval(tick, 1000);
+    piep(0);
+    S.probe[key] = { gestartet: Date.now() };
+    merke(`${t.titel}: Probeklausur „${p.titel}“ gestartet`);
+    speichern();
+    $("#probe-ergebnis").innerHTML = "";
+    lauf();
   });
+  // Läuft noch eine Simulation (z. B. nach Neuladen der Seite)? Dann Uhr weiterlaufen lassen.
+  const offen = S.probe[key];
+  if (offen && !offen.fertig && Date.now() - offen.gestartet < (dauer + 900) * 1000) lauf();
 }
 
 function seiteKorrektur(t) {
@@ -492,7 +592,7 @@ function bericht() {
       const schwer = u.aufgaben.map((a, i) => ({ a, r: r[i] })).filter((x) => x.r && (x.r.tipps >= 2 || x.r.versuche >= 3 || x.r.loesung)).map((x) => x.a.strategie || x.a.frage.replace(/\*\*|__|\[\[|\]\]/g, "").slice(0, 40));
       z.push(`Übung „${u.titel}“: ${geloest}/${u.aufgaben.length} gelöst${schwer.length ? `; schwer fiel: ${[...new Set(schwer)].join(", ")}` : ""}`);
     }
-    if (S.probe[t.id]) z.push(`Probeklausur gestartet am ${new Date(S.probe[t.id].gestartet).toLocaleDateString("de-DE")}`);
+    proben(t).forEach((p, i) => { const st = probeStatus(t, i + 1); if (st) z.push(`Probeklausur „${p.titel}“: ${st}`); });
     z.push("");
   }
   z.push("Letzte Aktivitäten:");
@@ -543,7 +643,7 @@ function route() {
     if (tab === "quiz") return p[3] ? seiteQuiz(t, p[3]) : seiteListe(t, "quiz");
     if (tab === "karten") return p[3] ? seiteKarten(t, p[3]) : seiteListe(t, "karten");
     if (tab === "ueben") return p[3] ? seiteUeben(t, p[3]) : seiteListe(t, "ueben");
-    if (tab === "probe") return seiteProbe(t);
+    if (tab === "probe") return seiteProbe(t, p[3]);
     if (tab === "korrektur") return seiteKorrektur(t);
     return seitePlan(t);
   }
