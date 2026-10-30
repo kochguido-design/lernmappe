@@ -1,0 +1,569 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Meine Lernmappe</title>
+<style>
+/* Heft-Stil wie auf Valentinas Arbeitsblättern: Papier, roter Rand, Füllerblau, Textmarker. */
+:root{
+  --paper:#fbfcfe; --ink:#1b2333; --ink-soft:#4b566c; --royal:#2343a6; --royal-soft:#e4e9f8;
+  --margin:#e58a8c; --red:#c4302a; --red-soft:#fbe4e2; --green:#1f7a45; --green-soft:#dcf3e3;
+  --line:#d3dbe8; --panel:#eef2f9; --card:#ffffff;
+  --hl-blue:#bde4ff; --hl-violet:#ddd2ff; --hl-green:#bdf0ad; --hl-yellow:#fff07a;
+  --hl-orange:#ffd29c; --hl-pink:#ffc6de; --hl-teal:#aeeee2; --hl-grey:#dfe5ef; --hl-red:#ffcdc7;
+  --font-display:"Bricolage Grotesque","Avenir Next","Segoe UI",system-ui,sans-serif;
+  --font-body:"Atkinson Hyperlegible",Verdana,"Segoe UI",system-ui,sans-serif;
+  --font-hand:"Caveat","Bradley Hand","Segoe Print",cursive;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;padding-inline:16px;background:var(--paper);color:var(--ink);font-family:var(--font-body);font-size:17px;line-height:1.55}
+.page{max-width:880px;margin-inline:auto;padding:28px 0 64px clamp(1rem,4vw,3rem);border-left:2px solid var(--margin);min-height:100vh}
+h1,h2,h3{font-family:var(--font-display);line-height:1.15;margin:0;text-wrap:balance}
+h1{font-size:clamp(1.7rem,4.5vw,2.3rem);color:var(--royal)}
+h2{font-size:1.3rem;margin:28px 0 12px}
+h3{font-size:1.08rem}
+p{margin:0 0 .6em}
+button{font:inherit;color:inherit;cursor:pointer}
+a{color:var(--royal)}
+:focus-visible{outline:3px solid var(--royal);outline-offset:2px;border-radius:6px}
+.leise{color:var(--ink-soft)}
+.klein{font-size:.88rem}
+.hand{font-family:var(--font-hand);color:var(--royal);font-size:1.35em;line-height:1.1}
+mark{background:var(--hl-yellow);color:inherit;padding:0 .12em;border-radius:3px}
+u{text-decoration-color:var(--red);text-decoration-thickness:2px;text-underline-offset:3px}
+
+/* Kopf */
+.kopf{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:8px}
+.etikett{background:var(--card);border:1.5px solid var(--line);border-radius:4px 12px 6px 10px;padding:8px 14px;font-size:.88rem;line-height:1.5;transform:rotate(1deg);box-shadow:0 1px 0 var(--line)}
+.etikett b{font-family:var(--font-hand);color:var(--royal);font-size:1.25rem;font-weight:400;margin-left:6px}
+.zurueck{display:inline-flex;align-items:center;gap:6px;background:none;border:0;padding:8px 0;color:var(--royal);font-weight:600;text-decoration:none;min-height:44px}
+
+/* Chips & Marker */
+.chip{display:inline-block;font-family:var(--font-display);font-weight:600;font-size:.86rem;line-height:1.25;padding:.12em .55em .16em;background:var(--c,var(--panel));border-radius:3px 9px 4px 8px;margin:0 .3rem .3rem 0}
+.c-blau{--c:var(--hl-blue)} .c-violett{--c:var(--hl-violet)} .c-gruen{--c:var(--hl-green)} .c-gelb{--c:var(--hl-yellow)}
+.c-orange{--c:var(--hl-orange)} .c-pink{--c:var(--hl-pink)} .c-tuerkis{--c:var(--hl-teal)} .c-grau{--c:var(--hl-grey)} .c-rot{--c:var(--hl-red)}
+
+/* Karten / Kacheln */
+.raster{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+.karte{background:var(--card);border:1.5px solid var(--line);border-radius:14px;padding:16px;text-decoration:none;color:var(--ink);display:grid;gap:6px;align-content:start;text-align:left}
+a.karte:hover,button.karte:hover{border-color:var(--royal)}
+.karte .titel{font-family:var(--font-display);font-weight:700;font-size:1.12rem}
+.balken{height:10px;background:var(--panel);border-radius:999px;overflow:hidden}
+.balken span{display:block;height:100%;background:var(--green);border-radius:999px}
+.countdown{font-weight:700;color:var(--green)} .countdown.bald{color:var(--red)}
+.weiter{background:var(--royal);color:#fff;border-radius:16px;padding:18px;display:flex;justify-content:space-between;align-items:center;gap:12px;text-decoration:none;margin:18px 0 6px}
+.weiter small{color:#cdd7f5;display:block}
+.weiter b{font-family:var(--font-display);font-size:1.15rem}
+.weiter .pfeil{font-size:1.8rem}
+
+/* Reiter */
+.reiter{display:flex;gap:6px;overflow-x:auto;padding:6px 0 10px;margin:14px 0 6px;scrollbar-width:none;border-bottom:2px dashed var(--line)}
+.reiter a{flex:none;text-decoration:none;color:var(--ink);background:var(--card);border:1.5px solid var(--line);border-radius:999px;padding:7px 14px;font-weight:600;font-size:.95rem}
+.reiter a.aktiv{background:var(--royal);border-color:var(--royal);color:#fff}
+
+/* Knöpfe */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--royal);color:#fff;border:0;border-radius:12px;padding:11px 18px;font-weight:700;min-height:46px;text-decoration:none}
+.btn:hover{filter:brightness(1.08)}
+.btn.hell{background:var(--card);color:var(--ink);border:1.5px solid var(--line)}
+.btn.gut{background:var(--green)}
+.btn.breit{width:100%}
+.btn:disabled{opacity:.5;cursor:default}
+.knoepfe{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+
+/* Lernplan */
+.schritt{display:flex;gap:12px;align-items:flex-start;background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:8px;cursor:pointer}
+.schritt input{width:24px;height:24px;margin:2px 0 0;flex:none;accent-color:var(--green)}
+.schritt.fertig{background:var(--green-soft);border-color:transparent}
+.schritt.fertig .stitel{text-decoration:line-through;color:var(--ink-soft)}
+.schritt.heute{border-color:var(--royal);box-shadow:0 0 0 2px var(--royal-soft)}
+.stitel{font-weight:700}
+.schritt ul{margin:4px 0 0;padding-left:20px}
+.schritt li a{font-weight:600}
+
+/* Merkzettel */
+.merk{background:var(--card);border:1.5px solid var(--line);border-left:8px solid var(--c,var(--panel));border-radius:6px 14px 14px 6px;padding:14px 16px;margin-bottom:12px}
+.merk h3{margin-bottom:6px}
+.merk .beispiele{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:6px;font-size:1.02rem}
+.merk .beispiele span{background:var(--panel);border-radius:6px;padding:2px 8px}
+
+/* Quiz */
+.frage{font-family:var(--font-display);font-size:1.3rem;margin:12px 0 14px}
+.optionen{display:grid;gap:10px}
+.option{display:flex;gap:12px;align-items:center;text-align:left;background:var(--card);border:2px solid var(--line);border-radius:14px;padding:13px 14px;font-size:1.05rem;min-height:56px}
+.option:not(:disabled):hover{border-color:var(--royal);background:var(--royal-soft)}
+.option:disabled{cursor:default}
+.buchst{flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--panel);font-weight:700;font-size:.9rem}
+.option.richtig{border-color:var(--green);background:var(--green-soft)} .option.richtig .buchst{background:var(--green);color:#fff}
+.option.falsch{border-color:var(--red);background:var(--red-soft)} .option.falsch .buchst{background:var(--red);color:#fff}
+.erkl{border-radius:14px;padding:12px 14px;margin:14px 0 4px;background:var(--red-soft)}
+.erkl.gut{background:var(--green-soft)}
+.ergebnis{text-align:center;padding:20px 0}
+.gross{font-family:var(--font-display);font-size:3.4rem;font-weight:800;color:var(--royal);line-height:1}
+
+/* Karteikarten */
+.kk{background:none;border:0;padding:0;perspective:1200px;width:100%;height:min(52vh,340px);display:block;margin-top:10px}
+.kk .innen{position:relative;width:100%;height:100%;transition:transform .5s;transform-style:preserve-3d}
+.kk.um .innen{transform:rotateY(180deg)}
+.seite{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:18px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;text-align:center;border:1.5px solid var(--line);overflow:auto}
+.vorne{background:var(--hl-yellow);font-family:var(--font-display);font-weight:700;font-size:1.35rem}
+.hinten{background:var(--card);transform:rotateY(180deg);font-size:1.1rem}
+.seite small{font-family:var(--font-body);font-weight:400;font-size:.85rem;color:var(--ink-soft)}
+@media (prefers-reduced-motion:reduce){.kk .innen{transition:none}}
+
+/* Üben */
+.aufgabe-box{background:var(--card);border:1.5px solid var(--line);border-radius:14px;padding:16px}
+.aufgabe-box .satz{font-size:1.2rem;margin:4px 0 12px}
+.eingabe-zeile{display:flex;gap:8px;flex-wrap:wrap}
+.eingabe-zeile input{flex:1;min-width:180px;font:inherit;font-size:1.15rem;padding:10px 12px;border:2px solid var(--line);border-radius:12px;background:#fff;color:var(--ink)}
+.eingabe-zeile input:focus{outline:none;border-color:var(--royal);box-shadow:0 0 0 3px var(--royal-soft)}
+.tipp{background:var(--hl-yellow);border-radius:4px 12px 6px 10px;padding:8px 12px;margin-top:10px}
+.loesung{background:var(--green-soft);border-radius:12px;padding:10px 12px;margin-top:10px}
+.rueckmeldung{margin-top:10px;font-weight:700}
+.rueckmeldung.gut{color:var(--green)} .rueckmeldung.schlecht{color:var(--red)}
+.punkte{display:flex;gap:5px;flex-wrap:wrap;margin:6px 0 10px}
+.punkte i{width:12px;height:12px;border-radius:50%;background:var(--line)}
+.punkte i.ok{background:var(--green)} .punkte i.jetzt{background:var(--royal)}
+
+/* Probeklausur */
+.probe-aufgabe{border-top:1.5px solid var(--line);padding:14px 0}
+.probe-aufgabe .nr{font-family:var(--font-display);font-weight:700;color:var(--royal)}
+.probe-aufgabe .pkt{float:right;color:var(--ink-soft);font-size:.9rem}
+.linien{margin-top:8px;height:calc(var(--z,3) * 34px);background:repeating-linear-gradient(transparent 0 33px,var(--line) 33px 34px)}
+.uhr{font-family:var(--font-display);font-size:2.2rem;font-weight:800;color:var(--royal)}
+.korrektur{background:var(--card);border:1.5px solid var(--line);border-left:8px solid var(--red);border-radius:6px 14px 14px 6px;padding:14px 16px;margin-bottom:12px}
+
+/* Bericht */
+textarea.bericht{width:100%;min-height:300px;font:inherit;font-size:.95rem;padding:12px;border:1.5px solid var(--line);border-radius:12px;background:#fff;color:var(--ink)}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--green);color:#fff;padding:12px 18px;border-radius:14px;font-weight:700;z-index:9;transition:opacity .5s}
+.fuss{margin-top:40px;padding-top:12px;border-top:2px dashed var(--line);font-size:.88rem;color:var(--ink-soft)}
+
+@media print{
+  body{background:#fff;padding:0}
+  .page{border-left:0;padding:0;max-width:none}
+  .nicht-drucken,.reiter,.zurueck,.fuss{display:none!important}
+  .probe-aufgabe{break-inside:avoid}
+}
+@media (max-width:560px){
+  body{font-size:16px}
+  .page{padding-left:12px}
+  .etikett{display:none}
+}
+</style>
+</head>
+<body>
+<div class="page" id="app"><p class="leise">Lernmappe wird geladen…</p></div>
+
+<script>
+// Inhalte melden sich hier an (siehe Ordner "inhalt").
+window.LM = { themen: [], thema(t) { this.themen.push(t); } };
+</script>
+<script src="inhalt/index.js"></script>
+<script>
+"use strict";
+const KIND = (window.LM_KIND || { name: "Valentina", klasse: "5" });
+const SPEICHER = "lernmappe-" + KIND.name.toLowerCase();
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const app = () => $("#app");
+
+// ---------- Fortschritt (bleibt in diesem Browser gespeichert) ----------
+let S = { plan: {}, quiz: {}, karten: {}, uebung: {}, probe: {}, log: [] };
+try { const roh = localStorage.getItem(SPEICHER); if (roh) S = Object.assign(S, JSON.parse(roh)); } catch (_) {}
+function speichern() { try { localStorage.setItem(SPEICHER, JSON.stringify(S)); } catch (_) {} }
+function merke(text) { S.log.push({ t: Date.now(), text }); if (S.log.length > 300) S.log = S.log.slice(-300); speichern(); }
+
+// ---------- Hilfen ----------
+const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+// Kleine Auszeichnung für Inhalte: **fett**, __unterstrichen__, [[markiert]], Zeilenumbruch
+const fmt = (s) => esc(s)
+  .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+  .replace(/__(.+?)__/g, "<u>$1</u>")
+  .replace(/\[\[(.+?)\]\]/g, "<mark>$1</mark>")
+  .replace(/\n/g, "<br>");
+const heuteISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+const tageBis = (iso) => Math.round((new Date(iso + "T12:00:00") - new Date(heuteISO() + "T12:00:00")) / 864e5);
+const datumLang = (iso) => new Date(iso + "T12:00:00").toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" });
+const datumKurz = (iso) => new Date(iso + "T12:00:00").toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" });
+function bisText(n) { return n < 0 ? "vorbei" : n === 0 ? "heute!" : n === 1 ? "morgen" : `in ${n} Tagen`; }
+function toast(t) { const d = document.createElement("div"); d.className = "toast"; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.style.opacity = 0, 2200); setTimeout(() => d.remove(), 2800); }
+function mischen(a) { const b = a.slice(); for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; }
+const thema = (id) => LM.themen.find((t) => t.id === id);
+const breite = (el) => { $$("[data-w]", el).forEach((e) => e.style.width = Math.max(0, Math.min(100, +e.dataset.w)) + "%"); };
+
+function fortschritt(t) {
+  const plan = t.lernplan || [];
+  const fertig = plan.filter((_, i) => S.plan[t.id]?.[i]).length;
+  return { fertig, gesamt: plan.length, prozent: plan.length ? Math.round(100 * fertig / plan.length) : 0 };
+}
+function naechsterSchritt() {
+  const heute = heuteISO();
+  const aktiv = LM.themen.filter((t) => !t.klausur || tageBis(t.klausur) >= 0);
+  aktiv.sort((a, b) => (a.klausur || "9999").localeCompare(b.klausur || "9999"));
+  for (const t of aktiv) {
+    const i = (t.lernplan || []).findIndex((s, i) => !S.plan[t.id]?.[i] && (!s.datum || s.datum <= heute));
+    if (i >= 0) return { t, i, s: t.lernplan[i] };
+  }
+  return null;
+}
+function linkZu(t, ziel) {
+  // ziel: "quiz:id", "karten:id", "ueben:id", "merk", "probe"
+  const [art, id] = String(ziel).split(":");
+  if (art === "merk") return `#/t/${t.id}/merk`;
+  if (art === "probe") return `#/t/${t.id}/probe`;
+  return `#/t/${t.id}/${art}/${id}`;
+}
+
+// ---------- Startseite ----------
+function seiteStart() {
+  const n = naechsterSchritt();
+  const themen = LM.themen.slice().sort((a, b) => (a.klausur || "9999").localeCompare(b.klausur || "9999"));
+  app().innerHTML = `
+    <div class="kopf">
+      <div><p class="hand">Hallo ${esc(KIND.name)}!</p><h1>Meine Lernmappe</h1></div>
+      <div class="etikett">Name <b>${esc(KIND.name)}</b><br>Klasse <b>${esc(KIND.klasse)}</b></div>
+    </div>
+    ${n ? `<a class="weiter" href="#/t/${n.t.id}/plan"><div><small>${esc(n.t.fach)} · Als Nächstes</small><b>${esc(n.s.titel)}</b></div><span class="pfeil">›</span></a>`
+        : LM.themen.length ? `<p class="hand">Alles erledigt, was heute dran ist. Super! 🎉</p>` : ""}
+    <h2>Meine Themen</h2>
+    ${themen.length ? `<div class="raster">${themen.map((t) => {
+      const f = fortschritt(t), tb = t.klausur ? tageBis(t.klausur) : null;
+      return `<a class="karte" href="#/t/${t.id}/plan">
+        <div><span class="chip c-${esc(t.farbe || "grau")}">${esc(t.fach)}</span></div>
+        <span class="titel">${esc(t.titel)}</span>
+        ${t.klausur ? `<span>${tb < 0 ? "Klausur war am" : "Klausur:"} ${datumKurz(t.klausur)} · <span class="countdown ${tb <= 2 ? "bald" : ""}">${bisText(tb)}</span></span>` : `<span class="leise">Zum Üben</span>`}
+        ${f.gesamt ? `<div class="balken"><span data-w="${f.prozent}"></span></div><small class="leise">${f.fertig} von ${f.gesamt} Schritten geschafft</small>` : ""}
+      </a>`; }).join("")}</div>`
+      : `<p class="leise">Noch keine Themen in der Mappe. Papa legt sie mit Claude an.</p>`}
+    <div class="fuss">
+      <p>Diese Lernmappe hat Papa mit Claude für dich vorbereitet. Hier ist keine KI drin. Deine Ergebnisse bleiben auf deinem Gerät, bis du sie Papa schickst.</p>
+      <p><a href="#/bericht">✉️ Fortschritt an Papa schicken</a></p>
+    </div>`;
+  breite(app());
+}
+
+// ---------- Thema ----------
+const REITER = [["plan", "Lernplan"], ["merk", "Merkzettel"], ["quiz", "Quiz"], ["karten", "Karteikarten"], ["ueben", "Üben"], ["probe", "Probeklausur"], ["korrektur", "Korrekturen"]];
+function themaKopf(t, aktiv) {
+  const vorhanden = { plan: t.lernplan?.length, merk: t.merkzettel?.length, quiz: t.quizze?.length, karten: t.karten?.length, ueben: t.uebungen?.length, probe: !!t.probeklausur, korrektur: t.korrekturen?.length };
+  const tb = t.klausur ? tageBis(t.klausur) : null;
+  return `<a class="zurueck" href="#/">‹ Meine Lernmappe</a>
+    <div><span class="chip c-${esc(t.farbe || "grau")}">${esc(t.fach)}</span></div>
+    <h1>${esc(t.titel)}</h1>
+    ${t.klausur ? `<p>Klausur am <b>${datumLang(t.klausur)}</b> · <span class="countdown ${tb <= 2 ? "bald" : ""}">${bisText(tb)}</span></p>` : ""}
+    <nav class="reiter">${REITER.filter(([k]) => vorhanden[k]).map(([k, n]) => `<a href="#/t/${t.id}/${k}" class="${k === aktiv ? "aktiv" : ""}">${n}</a>`).join("")}</nav>`;
+}
+
+function seitePlan(t) {
+  const f = fortschritt(t), heute = heuteISO();
+  app().innerHTML = themaKopf(t, "plan") + `
+    ${t.einleitung ? `<p>${fmt(t.einleitung)}</p>` : ""}
+    <div class="balken"><span data-w="${f.prozent}"></span></div><p class="leise klein">${f.fertig} von ${f.gesamt} Schritten geschafft</p>
+    ${(t.lernplan || []).map((s, i) => `
+      <label class="schritt ${S.plan[t.id]?.[i] ? "fertig" : ""} ${s.datum === heute ? "heute" : ""}">
+        <input type="checkbox" data-i="${i}" ${S.plan[t.id]?.[i] ? "checked" : ""}>
+        <div><div class="stitel">${s.datum ? datumKurz(s.datum) + ": " : `Schritt ${i + 1}: `}${esc(s.titel)} <span class="leise klein">· ca. ${s.dauer || 20} Min.</span></div>
+        <ul>${(s.aufgaben || []).map((a) => `<li>${a.ziel ? `<a href="${linkZu(t, a.ziel)}">${fmt(a.text)}</a>` : fmt(a.text)}</li>`).join("")}</ul></div>
+      </label>`).join("")}`;
+  $$(".schritt input").forEach((cb) => cb.addEventListener("change", () => {
+    S.plan[t.id] = S.plan[t.id] || {};
+    S.plan[t.id][cb.dataset.i] = cb.checked;
+    if (cb.checked) { merke(`${t.titel}: Schritt „${t.lernplan[cb.dataset.i].titel}“ erledigt`); toast("Abgehakt! ✅"); } else speichern();
+    seitePlan(t);
+  }));
+  breite(app());
+}
+
+function seiteMerk(t) {
+  app().innerHTML = themaKopf(t, "merk") + (t.merkzettel || []).map((m) => `
+    <section class="merk c-${esc(m.farbe || "grau")}">
+      <h3>${esc(m.titel)}</h3>
+      ${m.frage ? `<p class="leise"><i>${fmt(m.frage)}</i></p>` : ""}
+      <p>${fmt(m.text)}</p>
+      ${m.beispiele?.length ? `<div class="beispiele">${m.beispiele.map((b) => `<span>${fmt(b)}</span>`).join("")}</div>` : ""}
+    </section>`).join("") + `<div class="knoepfe nicht-drucken"><button class="btn hell" id="druck">🖨️ Merkzettel drucken</button></div>`;
+  $("#druck").addEventListener("click", () => window.print());
+}
+
+function seiteListe(t, art) {
+  const name = { quiz: "quizze", karten: "karten", ueben: "uebungen" }[art];
+  const liste = t[name] || [];
+  app().innerHTML = themaKopf(t, art) + `<div class="raster">${liste.map((x) => {
+    let info = "";
+    if (art === "quiz") { const r = S.quiz[t.id + "/" + x.id]; info = `${x.fragen.length} Fragen${r ? ` · Bestes Ergebnis: <b>${r.beste}/${r.total}</b>` : ""}`; }
+    if (art === "karten") { const r = S.karten[t.id + "/" + x.id]; info = `${x.karten.length} Karten${r ? ` · ${r.gewusst.length} gewusst` : ""}`; }
+    if (art === "ueben") { const r = S.uebung[t.id + "/" + x.id] || {}; const ok = Object.values(r).filter((v) => v.ok).length; info = `${x.aufgaben.length} Aufgaben${ok ? ` · ${ok} gelöst` : ""}`; }
+    return `<a class="karte" href="#/t/${t.id}/${art}/${x.id}"><span class="titel">${esc(x.titel)}</span>${x.beschreibung ? `<span class="leise">${fmt(x.beschreibung)}</span>` : ""}<small class="leise">${info}</small></a>`;
+  }).join("")}</div>`;
+}
+
+// ---------- Quiz ----------
+function seiteQuiz(t, qid) {
+  const q = (t.quizze || []).find((x) => x.id === qid);
+  if (!q) return seiteListe(t, "quiz");
+  const fragen = q.mischen === false ? q.fragen : mischen(q.fragen);
+  const antworten = [];
+  let nr = 0;
+  const frage = () => {
+    const f = fragen[nr];
+    // Antwortoptionen mischen, richtige Antwort merken
+    const opts = mischen(f.optionen.map((o, i) => ({ o, richtig: i === f.richtig })));
+    app().innerHTML = themaKopf(t, "quiz") + `
+      <p class="leise">${esc(q.titel)} · Frage ${nr + 1} von ${fragen.length}</p>
+      <div class="punkte">${fragen.map((_, i) => `<i class="${i < nr ? (antworten[i] ? "ok" : "") : i === nr ? "jetzt" : ""}"></i>`).join("")}</div>
+      ${f.thema ? `<span class="chip c-${esc(f.farbe || "grau")}">${esc(f.thema)}</span>` : ""}
+      <p class="frage">${fmt(f.frage)}</p>
+      <div class="optionen">${opts.map((o, i) => `<button class="option" data-i="${i}"><span class="buchst">${"ABCDEF"[i]}</span><span>${fmt(o.o)}</span></button>`).join("")}</div>
+      <div id="erkl"></div>`;
+    $$(".option").forEach((b) => b.addEventListener("click", () => {
+      const gewaehlt = opts[+b.dataset.i];
+      antworten[nr] = gewaehlt.richtig;
+      $$(".option").forEach((x) => { x.disabled = true; if (opts[+x.dataset.i].richtig) x.classList.add("richtig"); });
+      if (!gewaehlt.richtig) b.classList.add("falsch");
+      $("#erkl").innerHTML = `<div class="erkl ${gewaehlt.richtig ? "gut" : ""}"><b>${gewaehlt.richtig ? ["Richtig! 🎉", "Genau! ✅", "Stimmt! 👍"][nr % 3] : "Nicht ganz."}</b><br>${fmt(f.erklaerung)}</div>
+        <button class="btn breit" id="weiter">${nr + 1 < fragen.length ? "Weiter" : "Ergebnis ansehen"}</button>`;
+      $("#weiter").addEventListener("click", () => { nr++; nr < fragen.length ? frage() : ende(); });
+      $("#weiter").focus();
+    }));
+  };
+  const ende = () => {
+    const richtig = antworten.filter(Boolean).length, total = fragen.length;
+    const falsch = [...new Set(fragen.filter((_, i) => !antworten[i]).map((f) => f.thema).filter(Boolean))];
+    const key = t.id + "/" + q.id, alt = S.quiz[key];
+    S.quiz[key] = { beste: Math.max(richtig, alt?.beste || 0), letzte: richtig, total, falsch, mal: (alt?.mal || 0) + 1 };
+    merke(`${t.titel}: Quiz „${q.titel}“ ${richtig}/${total}${falsch.length ? ` (Fehler bei: ${falsch.join(", ")})` : ""}`);
+    const anteil = richtig / total;
+    app().innerHTML = themaKopf(t, "quiz") + `<div class="ergebnis">
+      <div class="gross">${richtig} / ${total}</div>
+      <p class="hand">${anteil === 1 ? "Alles richtig! Großartig! 🏆" : anteil >= .75 ? "Sehr gut gemacht! 🌟" : anteil >= .5 ? "Gut! Mit etwas Übung wird das noch besser. 💪" : "Das war schwer. Schau dir den Merkzettel nochmal an! 🤝"}</p>
+      ${falsch.length ? `<p class="leise">Das solltest du noch üben:</p><div>${falsch.map((x) => `<span class="chip c-gelb">${esc(x)}</span>`).join("")}</div>` : ""}
+      <div class="knoepfe" style="justify-content:center"><a class="btn" href="#/t/${t.id}/quiz/${q.id}?n=${Date.now()}">Nochmal</a><a class="btn hell" href="#/t/${t.id}/merk">Merkzettel</a><a class="btn hell" href="#/t/${t.id}/plan">Zum Lernplan</a></div>
+    </div>`;
+  };
+  frage();
+}
+
+// ---------- Karteikarten ----------
+function seiteKarten(t, kid) {
+  const k = (t.karten || []).find((x) => x.id === kid);
+  if (!k) return seiteListe(t, "karten");
+  const key = t.id + "/" + k.id;
+  let stapel = mischen(k.karten.map((c, i) => ({ ...c, i })));
+  const ersterVersuch = new Set(), gesehen = new Set();
+  const zeige = () => {
+    if (!stapel.length) return ende();
+    const c = stapel[0];
+    app().innerHTML = themaKopf(t, "karten") + `
+      <p class="leise">${esc(k.titel)} · noch ${stapel.length} Karten</p>
+      <button class="kk" id="kk" aria-label="Karte umdrehen"><div class="innen">
+        <div class="seite vorne">${fmt(c.vorne)}<small>Erst selbst überlegen, dann antippen</small></div>
+        <div class="seite hinten">${fmt(c.hinten)}</div></div></button>
+      <div class="knoepfe" id="bew" hidden><button class="btn hell" id="nochmal">↺ Nochmal</button><button class="btn gut" id="gewusst">✓ Wusste ich</button></div>`;
+    $("#kk").addEventListener("click", () => { $("#kk").classList.toggle("um"); $("#bew").hidden = false; });
+    $("#gewusst").addEventListener("click", () => { if (!gesehen.has(c.i)) ersterVersuch.add(c.i); gesehen.add(c.i); stapel.shift(); zeige(); });
+    $("#nochmal").addEventListener("click", () => { gesehen.add(c.i); stapel.push(stapel.shift()); zeige(); });
+  };
+  const ende = () => {
+    S.karten[key] = { gewusst: [...ersterVersuch], total: k.karten.length, mal: (S.karten[key]?.mal || 0) + 1 };
+    merke(`${t.titel}: Karteikarten „${k.titel}“ – ${ersterVersuch.size}/${k.karten.length} beim ersten Mal gewusst`);
+    app().innerHTML = themaKopf(t, "karten") + `<div class="ergebnis"><div class="gross">${ersterVersuch.size} / ${k.karten.length}</div>
+      <p class="hand">So viele wusstest du beim ersten Mal. Alle Karten sind durch! 🎉</p>
+      <div class="knoepfe" style="justify-content:center"><a class="btn" href="#/t/${t.id}/karten/${k.id}?n=${Date.now()}">Nochmal</a><a class="btn hell" href="#/t/${t.id}/plan">Zum Lernplan</a></div></div>`;
+  };
+  zeige();
+}
+
+// ---------- Üben mit Tipps ----------
+function normal(s, genau) {
+  let x = String(s).trim().replace(/\s+/g, " ").replace(/[.!?]+$/, "").replace(/[„“"]/g, "");
+  return genau ? x : x.toLowerCase();
+}
+function seiteUeben(t, uid) {
+  const u = (t.uebungen || []).find((x) => x.id === uid);
+  if (!u) return seiteListe(t, "ueben");
+  const key = t.id + "/" + u.id;
+  S.uebung[key] = S.uebung[key] || {};
+  let nr = u.aufgaben.findIndex((_, i) => !S.uebung[key][i]?.ok);
+  if (nr < 0) nr = 0;
+  const zeige = () => {
+    const a = u.aufgaben[nr], st = S.uebung[key][nr] || { tipps: 0, versuche: 0 };
+    S.uebung[key][nr] = st;
+    const genau = a.genau !== false;
+    app().innerHTML = themaKopf(t, "ueben") + `
+      <p class="leise">${esc(u.titel)} · Aufgabe ${nr + 1} von ${u.aufgaben.length}</p>
+      <div class="punkte">${u.aufgaben.map((_, i) => `<i class="${S.uebung[key][i]?.ok ? "ok" : i === nr ? "jetzt" : ""}"></i>`).join("")}</div>
+      ${u.anleitung ? `<p>${fmt(u.anleitung)}</p>` : ""}
+      <div class="aufgabe-box">
+        <p class="satz">${fmt(a.frage)}</p>
+        ${a.optionen ? `<div class="optionen">${a.optionen.map((o, i) => `<button class="option" data-o="${esc(o)}"><span class="buchst">${"ABCDEF"[i]}</span><span>${fmt(o)}</span></button>`).join("")}</div>`
+          : `<form class="eingabe-zeile" id="ef"><input id="ein" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${esc(a.platzhalter || "Deine Antwort")}" ${st.ok ? `disabled value="${esc(a.antworten[0])}"` : ""}><button class="btn" ${st.ok ? "disabled" : ""}>Prüfen</button></form>`}
+        <div id="rm"></div>
+        <div id="tipps">${(a.tipps || []).slice(0, st.tipps).map((x, i) => `<div class="tipp"><b>Tipp ${i + 1}:</b> ${fmt(x)}</div>`).join("")}</div>
+        <div id="lsg">${st.ok || st.loesung ? `<div class="loesung"><b>Lösung:</b> ${fmt(a.loesung || a.antworten?.[0] || "")}</div>` : ""}</div>
+      </div>
+      <div class="knoepfe">
+        ${!st.ok && st.tipps < (a.tipps || []).length ? `<button class="btn hell" id="tipp">💡 Tipp ${st.tipps + 1}</button>` : ""}
+        ${!st.ok && !st.loesung && (st.tipps >= (a.tipps || []).length || st.versuche >= 3) ? `<button class="btn hell" id="zeig">Lösung zeigen</button>` : ""}
+        ${nr > 0 ? `<button class="btn hell" id="zurueck">‹ Zurück</button>` : ""}
+        <button class="btn ${st.ok || st.loesung ? "" : "hell"}" id="vor">${nr + 1 < u.aufgaben.length ? "Nächste ›" : "Fertig"}</button>
+      </div>`;
+    const pruefe = (wert) => {
+      st.versuche++;
+      const ok = (a.antworten || []).some((x) => normal(x, genau) === normal(wert, genau));
+      if (ok) {
+        st.ok = true;
+        merke(`${t.titel}: „${u.titel}“ Aufgabe ${nr + 1} gelöst (${st.tipps} Tipps, ${st.versuche} Versuche)`);
+        speichern();
+        zeige();
+        $("#rm").innerHTML = `<p class="rueckmeldung gut">${["Richtig! 🎉", "Super gemacht! ✅", "Genau so! 👍"][nr % 3]}</p>`;
+      } else {
+        speichern();
+        const naeher = a.fast && a.fast.some((x) => normal(x, genau) === normal(wert, genau));
+        $("#rm").innerHTML = `<p class="rueckmeldung schlecht">${naeher ? "Fast! Schau nochmal genau hin." : "Noch nicht ganz. Probier es nochmal" + ((a.tipps || []).length > st.tipps ? " oder hol dir einen Tipp." : ".")}</p>`;
+        if (!st.loesung && st.versuche >= 3 && !$("#zeig")) zeige();
+      }
+    };
+    if (a.optionen) $$(".option").forEach((b) => b.addEventListener("click", () => { if (!st.ok) { pruefe(b.dataset.o); if (!st.ok) b.classList.add("falsch"); } }));
+    else { $("#ef").addEventListener("submit", (e) => { e.preventDefault(); const v = $("#ein").value; if (v.trim()) pruefe(v); }); if (!st.ok) $("#ein").focus(); }
+    $("#tipp")?.addEventListener("click", () => { st.tipps++; speichern(); zeige(); });
+    $("#zeig")?.addEventListener("click", () => { st.loesung = true; merke(`${t.titel}: „${u.titel}“ Aufgabe ${nr + 1} Lösung angesehen`); zeige(); });
+    $("#zurueck")?.addEventListener("click", () => { nr--; zeige(); });
+    $("#vor").addEventListener("click", () => { if (nr + 1 < u.aufgaben.length) { nr++; zeige(); } else fertig(); });
+  };
+  const fertig = () => {
+    const r = S.uebung[key], ok = u.aufgaben.filter((_, i) => r[i]?.ok).length;
+    app().innerHTML = themaKopf(t, "ueben") + `<div class="ergebnis"><div class="gross">${ok} / ${u.aufgaben.length}</div>
+      <p class="hand">${ok === u.aufgaben.length ? "Alle Aufgaben gelöst! 🏆" : "Gut gearbeitet! Die offenen Aufgaben kannst du später nochmal probieren."}</p>
+      <div class="knoepfe" style="justify-content:center"><a class="btn hell" href="#/t/${t.id}/ueben">Andere Übung</a><a class="btn" href="#/t/${t.id}/plan">Zum Lernplan</a></div></div>`;
+  };
+  zeige();
+}
+
+// ---------- Probeklausur ----------
+let uhrTimer = null;
+function seiteProbe(t) {
+  const p = t.probeklausur;
+  if (!p) return seitePlan(t);
+  const summe = p.aufgaben.reduce((s, a) => s + (a.punkte || 0), 0);
+  app().innerHTML = themaKopf(t, "probe") + `
+    <div class="nicht-drucken">
+      <p>${fmt(p.hinweis || "Nimm dir ein Blatt, stell den Wecker und arbeite ohne Hilfe. Wenn du fertig bist, gib das Blatt Papa. Er macht ein Foto, und Claude korrigiert es.")}</p>
+      <div class="knoepfe"><button class="btn" id="start">⏱️ ${p.dauer || 30} Minuten starten</button><button class="btn hell" id="druck">🖨️ Drucken</button></div>
+      <p class="uhr" id="uhr" hidden></p>
+    </div>
+    <h2>${esc(p.titel)}</h2>
+    <p class="leise">Name: ${esc(KIND.name)} · Zeit: ${p.dauer || 30} Minuten · ${summe} Punkte</p>
+    ${p.aufgaben.map((a, i) => `<div class="probe-aufgabe"><span class="pkt">${a.punkte} P.</span><span class="nr">Aufgabe ${i + 1}</span><p>${fmt(a.text)}</p>${a.zeilen ? `<div class="linien" style="--z:${a.zeilen}"></div>` : ""}</div>`).join("")}`;
+  $("#druck").addEventListener("click", () => window.print());
+  $("#start").addEventListener("click", () => {
+    clearInterval(uhrTimer);
+    let rest = (p.dauer || 30) * 60;
+    S.probe[t.id] = { gestartet: Date.now() };
+    merke(`${t.titel}: Probeklausur gestartet`);
+    const uhr = $("#uhr"); uhr.hidden = false;
+    const tick = () => {
+      if (!document.body.contains(uhr)) return clearInterval(uhrTimer);
+      uhr.textContent = rest > 0 ? `${Math.floor(rest / 60)}:${String(rest % 60).padStart(2, "0")}` : "Zeit ist um! Stift weg ✋";
+      rest--; if (rest < -1) clearInterval(uhrTimer);
+    };
+    tick(); uhrTimer = setInterval(tick, 1000);
+  });
+}
+
+function seiteKorrektur(t) {
+  app().innerHTML = themaKopf(t, "korrektur") + (t.korrekturen || []).map((k) => `
+    <section class="korrektur"><h3>${esc(k.titel)}</h3><p class="leise">${k.datum ? datumLang(k.datum) : ""}${k.punkte ? ` · <b>${esc(k.punkte)}</b>` : ""}</p><p>${fmt(k.text)}</p></section>`).join("");
+}
+
+// ---------- Bericht für Papa ----------
+function bericht() {
+  const z = [`Lernmappe ${KIND.name} – Stand ${new Date().toLocaleString("de-DE")}`, ""];
+  for (const t of LM.themen) {
+    const f = fortschritt(t);
+    z.push(`## ${t.fach}: ${t.titel}${t.klausur ? ` (Klausur ${t.klausur})` : ""}`);
+    if (f.gesamt) z.push(`Lernplan: ${f.fertig}/${f.gesamt} Schritte erledigt`);
+    for (const q of t.quizze || []) { const r = S.quiz[t.id + "/" + q.id]; if (r) z.push(`Quiz „${q.titel}“: zuletzt ${r.letzte}/${r.total}, bestes ${r.beste}/${r.total}, ${r.mal}× gemacht${r.falsch.length ? `; Fehler bei: ${r.falsch.join(", ")}` : ""}`); }
+    for (const k of t.karten || []) { const r = S.karten[t.id + "/" + k.id]; if (r) z.push(`Karteikarten „${k.titel}“: ${r.gewusst.length}/${r.total} beim ersten Mal gewusst, ${r.mal}× durchgegangen`); }
+    for (const u of t.uebungen || []) {
+      const r = S.uebung[t.id + "/" + u.id]; if (!r) continue;
+      const geloest = u.aufgaben.filter((_, i) => r[i]?.ok).length;
+      const schwer = u.aufgaben.map((a, i) => ({ a, r: r[i] })).filter((x) => x.r && (x.r.tipps >= 2 || x.r.versuche >= 3 || x.r.loesung)).map((x) => x.a.strategie || x.a.frage.replace(/\*\*|__|\[\[|\]\]/g, "").slice(0, 40));
+      z.push(`Übung „${u.titel}“: ${geloest}/${u.aufgaben.length} gelöst${schwer.length ? `; schwer fiel: ${[...new Set(schwer)].join(", ")}` : ""}`);
+    }
+    if (S.probe[t.id]) z.push(`Probeklausur gestartet am ${new Date(S.probe[t.id].gestartet).toLocaleDateString("de-DE")}`);
+    z.push("");
+  }
+  z.push("Letzte Aktivitäten:");
+  S.log.slice(-15).reverse().forEach((l) => z.push(`- ${new Date(l.t).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })} ${l.text}`));
+  return z.join("\n");
+}
+function seiteBericht() {
+  const text = bericht();
+  app().innerHTML = `<a class="zurueck" href="#/">‹ Meine Lernmappe</a><h1>Fortschritt für Papa</h1>
+    <p>Tipp auf <b>An Papa schicken</b> und wähl Nachrichten oder Mail. Papa gibt den Bericht an Claude weiter. Dann passen die nächsten Übungen genau zu dir.</p>
+    <textarea class="bericht" id="txt" readonly>${esc(text)}</textarea>
+    <div class="knoepfe"><button class="btn" id="schicken">✉️ An Papa schicken</button><button class="btn hell" id="kopie">📋 Kopieren</button><button class="btn hell" id="datei">💾 Als Datei speichern</button></div>`;
+  $("#schicken").addEventListener("click", async () => {
+    const betreff = `Lernmappe ${KIND.name} – Stand ${new Date().toLocaleDateString("de-DE")}`;
+    // Teilen-Menü (Nachrichten, Mail, AirDrop). Ohne Teilen-Menü öffnet sich eine neue Mail.
+    if (navigator.share) {
+      try { await navigator.share({ title: betreff, text }); merke("Fortschritt an Papa geschickt"); toast("Danke! 📨"); return; }
+      catch (e) { if (e && e.name === "AbortError") return; }
+    }
+    merke("Fortschritt per Mail an Papa geöffnet");
+    location.href = `mailto:?subject=${encodeURIComponent(betreff)}&body=${encodeURIComponent(text)}`;
+  });
+  $("#kopie").addEventListener("click", async () => {
+    const ta = $("#txt");
+    try { await navigator.clipboard.writeText(ta.value); toast("Kopiert!"); }
+    catch (_) { ta.focus(); ta.select(); try { document.execCommand("copy"); toast("Kopiert!"); } catch (e) { toast("Bitte mit Cmd+C kopieren"); } }
+  });
+  $("#datei").addEventListener("click", () => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+    a.download = `Lernmappe-Fortschritt-${heuteISO()}.txt`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  });
+}
+
+// ---------- Navigation ----------
+function route() {
+  clearInterval(uhrTimer);
+  const p = location.hash.replace(/^#\/?/, "").split("?")[0].split("/").filter(Boolean);
+  window.scrollTo(0, 0);
+  if (p[0] === "bericht") return seiteBericht();
+  if (p[0] === "t") {
+    const t = thema(p[1]);
+    if (!t) return seiteStart();
+    const tab = p[2] || "plan";
+    if (tab === "merk") return seiteMerk(t);
+    if (tab === "quiz") return p[3] ? seiteQuiz(t, p[3]) : seiteListe(t, "quiz");
+    if (tab === "karten") return p[3] ? seiteKarten(t, p[3]) : seiteListe(t, "karten");
+    if (tab === "ueben") return p[3] ? seiteUeben(t, p[3]) : seiteListe(t, "ueben");
+    if (tab === "probe") return seiteProbe(t);
+    if (tab === "korrektur") return seiteKorrektur(t);
+    return seitePlan(t);
+  }
+  seiteStart();
+}
+
+// Inhaltsdateien nacheinander laden, dann starten.
+(function laden() {
+  const dateien = (window.LM_DATEIEN || []).slice();
+  const naechste = () => {
+    const f = dateien.shift();
+    if (!f) { window.addEventListener("hashchange", route); return route(); }
+    const s = document.createElement("script");
+    s.src = "inhalt/" + f;
+    s.onload = naechste;
+    s.onerror = () => { console.warn("Konnte nicht laden:", f); naechste(); };
+    document.body.appendChild(s);
+  };
+  naechste();
+})();
+</script>
+</body>
+</html>
