@@ -107,7 +107,7 @@ a.karte:hover,button.karte:hover{border-color:var(--royal)}
 .kk{background:none;border:0;padding:0;perspective:1200px;width:100%;height:min(52vh,340px);display:block;margin-top:10px}
 .kk .innen{position:relative;width:100%;height:100%;transition:transform .5s;transform-style:preserve-3d}
 .kk.um .innen{transform:rotateY(180deg)}
-.seite{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:18px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;text-align:center;border:1.5px solid var(--line);overflow:auto}
+.seite{position:absolute;top:0;right:0;bottom:0;left:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:18px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;text-align:center;border:1.5px solid var(--line);overflow:auto}
 .vorne{background:var(--hl-yellow);font-family:var(--font-display);font-weight:700;font-size:1.35rem}
 .hinten{background:var(--card);transform:rotateY(180deg);font-size:1.1rem}
 .seite small{font-family:var(--font-body);font-weight:400;font-size:.85rem;color:var(--ink-soft)}
@@ -154,7 +154,7 @@ a.karte:hover,button.karte:hover{border-color:var(--royal)}
 .fotos button{position:absolute;top:6px;right:6px;width:32px;height:32px;border-radius:50%;border:0;background:rgba(27,35,51,.75);color:#fff;font-weight:700}
 .unsichtbar{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none}
 .schloss h1{margin-bottom:12px}
-.schloss input{text-transform:uppercase;letter-spacing:.08em}
+.schloss input{letter-spacing:.04em}
 .korrektur{background:var(--card);border:1.5px solid var(--line);border-left:8px solid var(--red);border-radius:6px 14px 14px 6px;padding:14px 16px;margin-bottom:12px}
 
 /* Bericht */
@@ -177,6 +177,27 @@ textarea.bericht{width:100%;min-height:300px;font:inherit;font-size:.95rem;paddi
 </head>
 <body>
 <div class="page" id="app"><p class="leise">Lernmappe wird geladen…</p></div>
+<script>
+/* Notfall-Anzeige: Startet die Lernmappe auf einem Gerät nicht, steht hier nach 8 Sekunden,
+   woran es liegt. Absichtlich in alter JavaScript-Schreibweise, damit sie auch auf alten iPads läuft. */
+(function () {
+  var fehler = [];
+  window.onerror = function (msg, quelle, zeile) { fehler.push(String(msg) + (zeile ? " (Zeile " + zeile + ")" : "")); };
+  setTimeout(function () {
+    var app = document.getElementById("app");
+    if (!app || app.getAttribute("data-gestartet")) return;
+    var e = function (t) { return String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;"); };
+    app.innerHTML = '<h1>Meine Lernmappe</h1>' +
+      '<p>Die Lernmappe konnte auf diesem Gerät leider nicht starten.</p>' +
+      '<p>Bitte mach ein Bildschirmfoto von dieser Seite und schick es Papa.</p>' +
+      '<p class="leise klein" style="word-break:break-all">Browser: ' + e(navigator.userAgent) +
+      '<br>Verschlüsselung verfügbar: ' + (window.crypto && window.crypto.subtle ? "ja" : "nein") +
+      '<br>Paket geladen: ' + (window.LM_PAKET ? "ja" : "nein") +
+      '<br>Speicher: ' + (function () { try { localStorage.setItem("lm-test", "1"); localStorage.removeItem("lm-test"); return "ja"; } catch (x) { return "nein"; } })() +
+      (fehler.length ? '<br>Fehler: ' + e(fehler.join(" | ")) : '') + '</p>';
+  }, 8000);
+})();
+</script>
 
 <script>
 // Inhalte melden sich hier an (siehe Ordner "inhalt").
@@ -192,6 +213,7 @@ const SCHLUESSEL = "lernmappe-schluessel";
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const app = () => $("#app");
+const KEIN = { addEventListener() {} };   // Ersatz, wenn ein Knopf auf der Seite fehlt (statt ?. für ältere iPads)
 
 // ---------- Fortschritt (bleibt in diesem Browser gespeichert) ----------
 let S = { plan: {}, quiz: {}, karten: {}, uebung: {}, probe: {}, diktat: {}, log: [] };
@@ -208,7 +230,7 @@ function speichern() { try { localStorage.setItem(SPEICHER, JSON.stringify(S)); 
 function merke(text) { S.log.push({ t: Date.now(), text }); if (S.log.length > 300) S.log = S.log.slice(-300); speichern(); }
 
 // ---------- Hilfen ----------
-const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const esc = (s) => String(s === undefined || s === null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 // Kleine Auszeichnung für Inhalte: **fett**, __unterstrichen__, [[markiert]], Zeilenumbruch
 const fmt = (s) => esc(s)
   .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
@@ -227,7 +249,7 @@ const breite = (el) => { $$("[data-w]", el).forEach((e) => e.style.width = Math.
 
 function fortschritt(t) {
   const plan = t.lernplan || [];
-  const fertig = plan.filter((_, i) => S.plan[t.id]?.[i]).length;
+  const fertig = plan.filter((_, i) => (S.plan[t.id] || {})[i]).length;
   return { fertig, gesamt: plan.length, prozent: plan.length ? Math.round(100 * fertig / plan.length) : 0 };
 }
 function naechsterSchritt() {
@@ -235,7 +257,7 @@ function naechsterSchritt() {
   const aktiv = LM.themen.filter((t) => !t.klausur || tageBis(t.klausur) >= 0);
   aktiv.sort((a, b) => (a.klausur || "9999").localeCompare(b.klausur || "9999"));
   for (const t of aktiv) {
-    const i = (t.lernplan || []).findIndex((s, i) => !S.plan[t.id]?.[i] && (!s.datum || s.datum <= heute));
+    const i = (t.lernplan || []).findIndex((s, i) => !(S.plan[t.id] || {})[i] && (!s.datum || s.datum <= heute));
     if (i >= 0) return { t, i, s: t.lernplan[i] };
   }
   return null;
@@ -280,7 +302,7 @@ function seiteStart() {
 // ---------- Thema ----------
 const REITER = [["plan", "Lernplan"], ["merk", "Merkzettel"], ["quiz", "Quiz"], ["karten", "Karteikarten"], ["ueben", "Üben"], ["diktat", "Diktate"], ["probe", "Probeklausur"], ["korrektur", "Korrekturen"]];
 function themaKopf(t, aktiv) {
-  const vorhanden = { plan: t.lernplan?.length, merk: t.merkzettel?.length, quiz: t.quizze?.length, karten: t.karten?.length, ueben: t.uebungen?.length, diktat: t.diktate?.length, probe: proben(t).length, korrektur: t.korrekturen?.length };
+  const vorhanden = { plan: (t.lernplan || []).length, merk: (t.merkzettel || []).length, quiz: (t.quizze || []).length, karten: (t.karten || []).length, ueben: (t.uebungen || []).length, diktat: (t.diktate || []).length, probe: proben(t).length, korrektur: (t.korrekturen || []).length };
   const tb = t.klausur ? tageBis(t.klausur) : null;
   return `<a class="zurueck" href="#/">‹ Meine Lernmappe</a>
     <div><span class="chip c-${esc(t.farbe || "grau")}">${esc(t.fach)}</span></div>
@@ -295,8 +317,8 @@ function seitePlan(t) {
     ${t.einleitung ? `<p>${fmt(t.einleitung)}</p>` : ""}
     <div class="balken"><span data-w="${f.prozent}"></span></div><p class="leise klein">${f.fertig} von ${f.gesamt} Schritten geschafft</p>
     ${(t.lernplan || []).map((s, i) => `
-      <label class="schritt ${S.plan[t.id]?.[i] ? "fertig" : ""} ${s.datum === heute ? "heute" : ""}">
-        <input type="checkbox" data-i="${i}" ${S.plan[t.id]?.[i] ? "checked" : ""}>
+      <label class="schritt ${(S.plan[t.id] || {})[i] ? "fertig" : ""} ${s.datum === heute ? "heute" : ""}">
+        <input type="checkbox" data-i="${i}" ${(S.plan[t.id] || {})[i] ? "checked" : ""}>
         <div><div class="stitel">${s.datum ? datumKurz(s.datum) + ": " : `Schritt ${i + 1}: `}${esc(s.titel)} <span class="leise klein">· ca. ${s.dauer || 20} Min.</span></div>
         <ul>${(s.aufgaben || []).map((a) => `<li>${a.ziel ? `<a href="${linkZu(t, a.ziel)}">${fmt(a.text)}</a>` : fmt(a.text)}</li>`).join("")}</ul></div>
       </label>`).join("")}
@@ -316,7 +338,7 @@ function seiteMerk(t) {
       <h3>${esc(m.titel)}</h3>
       ${m.frage ? `<p class="leise"><i>${fmt(m.frage)}</i></p>` : ""}
       <p>${fmt(m.text)}</p>
-      ${m.beispiele?.length ? `<div class="beispiele">${m.beispiele.map((b) => `<span>${fmt(b)}</span>`).join("")}</div>` : ""}
+      ${(m.beispiele || []).length ? `<div class="beispiele">${m.beispiele.map((b) => `<span>${fmt(b)}</span>`).join("")}</div>` : ""}
     </section>`).join("") + `<div class="knoepfe nicht-drucken"><button class="btn hell" id="druck">🖨️ Merkzettel drucken</button></div>`;
   $("#druck").addEventListener("click", () => window.print());
 }
@@ -367,7 +389,7 @@ function seiteQuiz(t, qid) {
     const richtig = antworten.filter(Boolean).length, total = fragen.length;
     const falsch = [...new Set(fragen.filter((_, i) => !antworten[i]).map((f) => f.thema).filter(Boolean))];
     const key = t.id + "/" + q.id, alt = S.quiz[key];
-    S.quiz[key] = { beste: Math.max(richtig, alt?.beste || 0), letzte: richtig, total, falsch, mal: (alt?.mal || 0) + 1 };
+    S.quiz[key] = { beste: Math.max(richtig, (alt || {}).beste || 0), letzte: richtig, total, falsch, mal: ((alt || {}).mal || 0) + 1 };
     merke(`${t.titel}: Quiz „${q.titel}“ ${richtig}/${total}${falsch.length ? ` (Fehler bei: ${falsch.join(", ")})` : ""}`);
     const anteil = richtig / total;
     app().innerHTML = themaKopf(t, "quiz") + `<div class="ergebnis">
@@ -401,7 +423,7 @@ function seiteKarten(t, kid) {
     $("#nochmal").addEventListener("click", () => { gesehen.add(c.i); stapel.push(stapel.shift()); zeige(); });
   };
   const ende = () => {
-    S.karten[key] = { gewusst: [...ersterVersuch], total: k.karten.length, mal: (S.karten[key]?.mal || 0) + 1 };
+    S.karten[key] = { gewusst: [...ersterVersuch], total: k.karten.length, mal: ((S.karten[key] || {}).mal || 0) + 1 };
     merke(`${t.titel}: Karteikarten „${k.titel}“ – ${ersterVersuch.size}/${k.karten.length} beim ersten Mal gewusst`);
     app().innerHTML = themaKopf(t, "karten") + `<div class="ergebnis"><div class="gross">${ersterVersuch.size} / ${k.karten.length}</div>
       <p class="hand">So viele wusstest du beim ersten Mal. Alle Karten sind durch! 🎉</p>
@@ -420,7 +442,7 @@ function seiteUeben(t, uid) {
   if (!u) return seiteListe(t, "ueben");
   const key = t.id + "/" + u.id;
   S.uebung[key] = S.uebung[key] || {};
-  let nr = u.aufgaben.findIndex((_, i) => !S.uebung[key][i]?.ok);
+  let nr = u.aufgaben.findIndex((_, i) => !(S.uebung[key][i] || {}).ok);
   if (nr < 0) nr = 0;
   const zeige = () => {
     const a = u.aufgaben[nr], st = S.uebung[key][nr] || { tipps: 0, versuche: 0 };
@@ -428,7 +450,7 @@ function seiteUeben(t, uid) {
     const genau = a.genau !== false;
     app().innerHTML = themaKopf(t, "ueben") + `
       <p class="leise">${esc(u.titel)} · Aufgabe ${nr + 1} von ${u.aufgaben.length}</p>
-      <div class="punkte">${u.aufgaben.map((_, i) => `<i class="${S.uebung[key][i]?.ok ? "ok" : i === nr ? "jetzt" : ""}"></i>`).join("")}</div>
+      <div class="punkte">${u.aufgaben.map((_, i) => `<i class="${(S.uebung[key][i] || {}).ok ? "ok" : i === nr ? "jetzt" : ""}"></i>`).join("")}</div>
       ${u.anleitung ? `<p>${fmt(u.anleitung)}</p>` : ""}
       <div class="aufgabe-box">
         <p class="satz">${fmt(a.frage)}</p>
@@ -437,7 +459,7 @@ function seiteUeben(t, uid) {
           : `<form class="eingabe-zeile" id="ef"><input id="ein" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${esc(a.platzhalter || "Deine Antwort")}" ${st.ok ? `disabled value="${esc(a.antworten[0])}"` : ""}><button class="btn" ${st.ok ? "disabled" : ""}>Prüfen</button></form>`}
         <div id="rm"></div>
         <div id="tipps">${(a.tipps || []).slice(0, st.tipps).map((x, i) => `<div class="tipp"><b>Tipp ${i + 1}:</b> ${fmt(x)}</div>`).join("")}</div>
-        <div id="lsg">${st.ok || st.loesung ? `<div class="loesung"><b>Lösung:</b> ${fmt(a.loesung || a.antworten?.[0] || "")}</div>` : ""}</div>
+        <div id="lsg">${st.ok || st.loesung ? `<div class="loesung"><b>Lösung:</b> ${fmt(a.loesung || (a.antworten || [])[0] || "")}</div>` : ""}</div>
       </div>
       <div class="knoepfe">
         ${!st.ok && st.tipps < (a.tipps || []).length ? `<button class="btn hell" id="tipp">💡 Tipp ${st.tipps + 1}</button>` : ""}
@@ -464,14 +486,14 @@ function seiteUeben(t, uid) {
     };
     if (a.optionen) $$(".option").forEach((b) => b.addEventListener("click", () => { if (!st.ok) { pruefe(b.dataset.o); if (!st.ok) b.classList.add("falsch"); } }));
     else { $("#ef").addEventListener("submit", (e) => { e.preventDefault(); const v = $("#ein").value; if (v.trim()) pruefe(v); }); if (!st.ok) $("#ein").focus(); }
-    $("#hoer")?.addEventListener("click", () => sprich(a.sprich, 0.8));
-    $("#tipp")?.addEventListener("click", () => { st.tipps++; speichern(); zeige(); });
-    $("#zeig")?.addEventListener("click", () => { st.loesung = true; merke(`${t.titel}: „${u.titel}“ Aufgabe ${nr + 1} Lösung angesehen`); zeige(); });
-    $("#zurueck")?.addEventListener("click", () => { nr--; zeige(); });
+    ($("#hoer") || KEIN).addEventListener("click", () => sprich(a.sprich, 0.8));
+    ($("#tipp") || KEIN).addEventListener("click", () => { st.tipps++; speichern(); zeige(); });
+    ($("#zeig") || KEIN).addEventListener("click", () => { st.loesung = true; merke(`${t.titel}: „${u.titel}“ Aufgabe ${nr + 1} Lösung angesehen`); zeige(); });
+    ($("#zurueck") || KEIN).addEventListener("click", () => { nr--; zeige(); });
     $("#vor").addEventListener("click", () => { if (nr + 1 < u.aufgaben.length) { nr++; zeige(); } else fertig(); });
   };
   const fertig = () => {
-    const r = S.uebung[key], ok = u.aufgaben.filter((_, i) => r[i]?.ok).length;
+    const r = S.uebung[key], ok = u.aufgaben.filter((_, i) => (r[i] || {}).ok).length;
     app().innerHTML = themaKopf(t, "ueben") + `<div class="ergebnis"><div class="gross">${ok} / ${u.aufgaben.length}</div>
       <p class="hand">${ok === u.aufgaben.length ? "Alle Aufgaben gelöst! 🏆" : "Gut gearbeitet! Die offenen Aufgaben kannst du später nochmal probieren."}</p>
       <div class="knoepfe" style="justify-content:center"><a class="btn hell" href="#/t/${t.id}/ueben">Andere Übung</a><a class="btn" href="#/t/${t.id}/plan">Zum Lernplan</a></div></div>`;
@@ -658,13 +680,13 @@ function seiteDiktat(t, did) {
         <button class="btn hell" id="text">👀 Text zum Vergleichen</button></div>
       <div id="vergleich"></div>`;
     app().innerHTML = themaKopf(t, "diktat") + `<p class="leise">${esc(d.titel)}</p>` + inhalt;
-    $("#alles")?.addEventListener("click", () => lies(ganz, Math.min(1, opt.tempo + 0.1)));
-    $("#los")?.addEventListener("click", () => { nr = 0; zeige(); lies(d.teile[0]); });
+    ($("#alles") || KEIN).addEventListener("click", () => lies(ganz, Math.min(1, opt.tempo + 0.1)));
+    ($("#los") || KEIN).addEventListener("click", () => { nr = 0; zeige(); lies(d.teile[0]); });
     $$('input[name="tempo"]').forEach((r) => r.addEventListener("change", () => { opt.tempo = +r.value; speichern(); }));
-    $("#zeichen")?.addEventListener("change", (e) => { opt.zeichen = e.target.checked; speichern(); });
-    $("#nochmal")?.addEventListener("click", () => lies(d.teile[nr]));
-    $("#zurueck")?.addEventListener("click", () => { nr--; zeige(); lies(d.teile[nr]); });
-    $("#weiter")?.addEventListener("click", () => {
+    ($("#zeichen") || KEIN).addEventListener("change", (e) => { opt.zeichen = e.target.checked; speichern(); });
+    ($("#nochmal") || KEIN).addEventListener("click", () => lies(d.teile[nr]));
+    ($("#zurueck") || KEIN).addEventListener("click", () => { nr--; zeige(); lies(d.teile[nr]); });
+    ($("#weiter") || KEIN).addEventListener("click", () => {
       nr++;
       if (nr >= d.teile.length) {
         const r = S.diktat[key] || { mal: 0 };
@@ -676,7 +698,7 @@ function seiteDiktat(t, did) {
       }
       zeige(); lies(d.teile[nr]);
     });
-    $("#text")?.addEventListener("click", () => {
+    ($("#text") || KEIN).addEventListener("click", () => {
       $("#vergleich").innerHTML = `<div class="aufgabe-box"><p class="leise">Vergleiche Wort für Wort. Jeder gefundene Fehler ist ein Erfolg, denn so lernst du!</p><p style="font-size:1.15rem;line-height:1.8">${esc(ganz)}</p></div>`;
     });
   };
@@ -797,9 +819,9 @@ function bericht() {
     for (const k of t.karten || []) { const r = S.karten[t.id + "/" + k.id]; if (r) z.push(`Karteikarten „${k.titel}“: ${r.gewusst.length}/${r.total} beim ersten Mal gewusst, ${r.mal}× durchgegangen`); }
     for (const u of t.uebungen || []) {
       const r = S.uebung[t.id + "/" + u.id]; if (!r) continue;
-      const geloest = u.aufgaben.filter((_, i) => r[i]?.ok).length;
+      const geloest = u.aufgaben.filter((_, i) => (r[i] || {}).ok).length;
       const schwer = u.aufgaben.map((a, i) => ({ a, r: r[i] })).filter((x) => x.r && (x.r.tipps >= 2 || x.r.versuche >= 3 || x.r.loesung || (x.r.falsch || []).length))
-        .map((x) => `${x.a.antworten?.[0] || x.a.frage.replace(/\*\*|__|\[\[|\]\]/g, "").slice(0, 30)}${(x.r.falsch || []).length ? ` (schrieb: ${x.r.falsch.join(" / ")})` : ""}${x.a.strategie ? ` [${x.a.strategie}]` : ""}`);
+        .map((x) => `${(x.a.antworten || [])[0] || x.a.frage.replace(/\*\*|__|\[\[|\]\]/g, "").slice(0, 30)}${(x.r.falsch || []).length ? ` (schrieb: ${x.r.falsch.join(" / ")})` : ""}${x.a.strategie ? ` [${x.a.strategie}]` : ""}`);
       z.push(`Übung „${u.titel}“: ${geloest}/${u.aufgaben.length} gelöst${schwer.length ? `; schwer fiel: ${[...new Set(schwer)].join(", ")}` : ""}`);
     }
     for (const d of t.diktate || []) { const r = S.diktat[t.id + "/" + d.id]; if (r) z.push(`Diktat „${d.titel}“: ${r.mal}× geschrieben, zuletzt ${new Date(r.zuletzt).toLocaleDateString("de-DE")}`); }
@@ -910,14 +932,14 @@ function seiteSchloss(meldung) {
   app().innerHTML = `<div class="schloss">
       <p class="hand">Hallo!</p><h1>Meine Lernmappe</h1>
       <p>Gib dein Lernmappen-Passwort ein. Das musst du nur einmal machen.</p>
-      <form class="eingabe-zeile" id="pw-form"><input id="pw" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX" aria-label="Passwort"><button class="btn">🔓 Öffnen</button></form>
+      <form class="eingabe-zeile" id="pw-form"><input id="pw" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Passwort" aria-label="Passwort"><button class="btn">🔓 Öffnen</button></form>
       <div id="pw-meldung">${meldung ? `<p class="rueckmeldung schlecht">${esc(meldung)}</p>` : ""}</div>
       <p class="leise klein">Du hast das Passwort nicht? Frag Papa.</p></div>`;
   $("#pw").focus();
   $("#pw-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const pw = $("#pw").value;
-    if (normPw(pw).length < 16) return ($("#pw-meldung").innerHTML = `<p class="rueckmeldung schlecht">Das Passwort hat 16 Zeichen. Schau nochmal genau.</p>`);
+    if (normPw(pw).length < 8) return ($("#pw-meldung").innerHTML = `<p class="rueckmeldung schlecht">Das Passwort ist länger. Schau nochmal genau.</p>`);
     $("#pw-meldung").innerHTML = `<p class="leise">Einen Moment …</p>`;
     let text = null;
     try { text = await mitPasswort(pw); }
@@ -926,6 +948,7 @@ function seiteSchloss(meldung) {
   });
 }
 (async function start() {
+  app().setAttribute("data-gestartet", "1");
   if (!window.LM_PAKET || !window.crypto || !crypto.subtle) {
     app().innerHTML = `<p class="rueckmeldung schlecht">Die Lernmappe konnte nicht geladen werden. Bitte lade die Seite neu.</p>`;
     return;
