@@ -20,7 +20,8 @@
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;padding-left:16px;padding-right:16px;background:var(--paper);color:var(--ink);font-family:var(--font-body);font-size:17px;line-height:1.55}
-.page{max-width:1200px;margin-left:auto;margin-right:auto;padding:24px 8px 64px;min-height:100vh}
+.page{max-width:none;margin:0;padding:24px 8px 64px;min-height:100vh}
+.page p{max-width:80ch}
 h1,h2,h3{font-family:var(--font-display);line-height:1.15;margin:0;text-wrap:balance}
 h1{font-size:clamp(1.7rem,4.5vw,2.3rem);color:var(--royal)}
 h2{font-size:1.3rem;margin:28px 0 12px}
@@ -152,6 +153,8 @@ a.karte:hover,button.karte:hover{border-color:var(--royal)}
 .fotos figure{margin:0;position:relative}
 .fotos img{display:block;width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:10px;border:1.5px solid var(--line);background:var(--panel)}
 .fotos button{position:absolute;top:6px;right:6px;width:32px;height:32px;border-radius:50%;border:0;background:rgba(27,35,51,.75);color:#fff;font-weight:700}
+.overlay{position:fixed;top:0;right:0;bottom:0;left:0;z-index:20;background:var(--paper);overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px}
+.overlay .innen{max-width:900px;margin:0 auto}
 .unsichtbar{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none}
 .schloss h1{margin-bottom:12px}
 .schloss input{letter-spacing:.04em}
@@ -466,6 +469,7 @@ function seiteUeben(t, uid) {
         ${!st.ok && !st.loesung && (st.tipps >= (a.tipps || []).length || st.versuche >= 3) ? `<button class="btn hell" id="zeig">Lösung zeigen</button>` : ""}
         ${nr > 0 ? `<button class="btn hell" id="zurueck">‹ Zurück</button>` : ""}
         <button class="btn ${st.ok || st.loesung ? "" : "hell"}" id="vor">${nr + 1 < u.aufgaben.length ? "Nächste ›" : "Fertig"}</button>
+        <button class="btn hell" id="foto-auf">📷 Handschrift fotografieren</button>
       </div>`;
     const pruefe = (wert) => {
       st.versuche++;
@@ -491,6 +495,7 @@ function seiteUeben(t, uid) {
     ($("#zeig") || KEIN).addEventListener("click", () => { st.loesung = true; merke(`${t.titel}: „${u.titel}“ Aufgabe ${nr + 1} Lösung angesehen`); zeige(); });
     ($("#zurueck") || KEIN).addEventListener("click", () => { nr--; zeige(); });
     $("#vor").addEventListener("click", () => { if (nr + 1 < u.aufgaben.length) { nr++; zeige(); } else fertig(); });
+    $("#foto-auf").addEventListener("click", () => fotoOverlay(t, `${u.titel}, Aufgabe ${nr + 1}`));
   };
   const fertig = () => {
     const r = S.uebung[key], ok = u.aufgaben.filter((_, i) => (r[i] || {}).ok).length;
@@ -663,7 +668,7 @@ function seiteDiktat(t, did) {
     let inhalt = "";
     if (nr < 0) inhalt = `
       <p>Nimm ein Blatt und einen Stift. Das iPad liest dir den Text vor. Hör dir zuerst alles einmal an, ohne zu schreiben. Dann diktiert es dir Stück für Stück. Jedes Stück kannst du so oft hören, wie du willst.</p>
-      <div class="knoepfe"><button class="btn hell" id="alles">▶ Ganzen Text anhören</button><button class="btn" id="los">✏️ Los geht's</button></div>
+      <div class="knoepfe"><button class="btn hell" id="alles">▶ Ganzen Text anhören</button><button class="btn" id="los">✏️ Los geht's</button><button class="btn hell" id="foto-auf">📷 Diktat fotografieren</button></div>
       <details class="profi"><summary>⚙️ Einstellungen</summary>
         <p><label><input type="radio" name="tempo" value="0.7" ${opt.tempo <= 0.7 ? "checked" : ""}> langsam</label> &nbsp; <label><input type="radio" name="tempo" value="0.8" ${opt.tempo > 0.7 && opt.tempo < 0.9 ? "checked" : ""}> mittel</label> &nbsp; <label><input type="radio" name="tempo" value="0.95" ${opt.tempo >= 0.9 ? "checked" : ""}> normal</label></p>
         <p><label><input type="checkbox" id="zeichen" ${opt.zeichen ? "checked" : ""}> Satzzeichen ansagen (Komma, Punkt, Anführungszeichen …)</label></p></details>`;
@@ -672,11 +677,11 @@ function seiteDiktat(t, did) {
       <div class="punkte">${d.teile.map((_, i) => `<i class="${i < nr ? "ok" : i === nr ? "jetzt" : ""}"></i>`).join("")}</div>
       <div class="aufgabe-box" style="text-align:center"><p class="gross" style="font-size:2.6rem">🔊</p><p class="leise">Hör gut zu und schreib dann. Sprich dabei leise in Silben mit.</p>
         <div class="knoepfe" style="justify-content:center"><button class="btn" id="nochmal">🔊 Nochmal hören</button></div></div>
-      <div class="knoepfe">${nr > 0 ? `<button class="btn hell" id="zurueck">‹ Zurück</button>` : ""}<button class="btn" id="weiter">${nr + 1 < n ? "Weiter ›" : "Fertig ✓"}</button></div>`;
+      <div class="knoepfe">${nr > 0 ? `<button class="btn hell" id="zurueck">‹ Zurück</button>` : ""}<button class="btn" id="weiter">${nr + 1 < n ? "Weiter ›" : "Fertig ✓"}</button><button class="btn hell" id="foto-auf">📷 Diktat fotografieren</button></div>`;
     else inhalt = `
       <div class="erkl gut"><b>Super, du hast das ganze Diktat geschrieben! 🎉</b><br>Jetzt kommt die Fehlerbrille: Hör den Text noch einmal und lies mit dem Finger Wort für Wort mit. Mach einen Bleistiftpunkt unter jedes Wort, bei dem du unsicher bist, und prüf es mit einer Strategie.</div>
       <div class="knoepfe"><button class="btn hell" id="alles">▶ Ganzen Text noch einmal</button>
-        <a class="btn" href="#/foto/${t.id}/${encodeURIComponent(d.titel)}">📷 Foto an Papa</a>
+        <button class="btn" id="foto-auf">📷 Diktat fotografieren</button>
         <button class="btn hell" id="text">👀 Text zum Vergleichen</button></div>
       <div id="vergleich"></div>`;
     app().innerHTML = themaKopf(t, "diktat") + `<p class="leise">${esc(d.titel)}</p>` + inhalt;
@@ -698,6 +703,7 @@ function seiteDiktat(t, did) {
       }
       zeige(); lies(d.teile[nr]);
     });
+    ($("#foto-auf") || KEIN).addEventListener("click", () => fotoOverlay(t, d.titel));
     ($("#text") || KEIN).addEventListener("click", () => {
       $("#vergleich").innerHTML = `<div class="aufgabe-box"><p class="leise">Vergleiche Wort für Wort. Jeder gefundene Fehler ist ein Erfolg, denn so lernst du!</p><p style="font-size:1.15rem;line-height:1.8">${esc(ganz)}</p></div>`;
     });
@@ -738,15 +744,14 @@ async function fotoTeilen(was) {
   try { await navigator.share({ files, title: "Foto für Papa", text: was }); return "ok"; }
   catch (e) { return e && e.name === "AbortError" ? "abgebrochen" : "geht-nicht"; }
 }
-function seiteFoto(tid, info) {
-  const t = tid ? thema(tid) : null;
-  let infoText = "";
-  try { infoText = info ? decodeURIComponent(info) : ""; } catch (_) {}
+// Baustein: Kamera, Vorschau und Senden. Läuft als eigene Seite (#/foto) oder als Fenster über einer Aufgabe.
+function fotoOberflaeche(ziel, t, infoText, schliessen) {
   const vorschlag = [t ? `${t.fach}: ${t.titel}` : "", infoText].filter(Boolean).join(" – ");
   const direkt = !!(KIND.upload && KIND.upload.url);
   fotoListe.forEach((f) => URL.revokeObjectURL(f.url));
   fotoListe = [];
-  app().innerHTML = `<a class="zurueck" href="${t ? `#/t/${t.id}/plan` : "#/"}">‹ Zurück</a>
+  ziel.innerHTML = `
+    ${schliessen ? `<div class="knoepfe" style="justify-content:flex-end;margin:0"><button class="btn hell" id="foto-zu">✕ Schließen</button></div>` : ""}
     <h1>📷 Foto an Papa</h1>
     <p>Fotografier dein Blatt oder deine Rechnung. ${direkt ? "Die Fotos gehen direkt an Papa." : "Danach schickst du sie Papa, zum Beispiel über Nachrichten."}</p>
     <label class="feld"><span>Was ist auf dem Foto?</span><input id="foto-was" value="${esc(vorschlag)}" placeholder="z. B. Mathe-Hausaufgabe S. 34"></label>
@@ -782,7 +787,8 @@ function seiteFoto(tid, info) {
       fotoListe.forEach((f) => URL.revokeObjectURL(f.url));
       fotoListe = [];
       zeigeFotos();
-      meldung(`<div class="erkl gut"><b>Papa hat deine Fotos bekommen! ✅</b><br>Claude schaut sie sich an. Super gemacht!</div>`);
+      meldung(`<div class="erkl gut"><b>Papa hat deine Fotos bekommen! ✅</b><br>Claude schaut sie sich an. Super gemacht!</div>${schliessen ? `<div class="knoepfe"><button class="btn" id="foto-weiter">✓ Weiter</button></div>` : ""}`);
+      ($("#foto-weiter") || KEIN).addEventListener("click", schliessen);
       toast("Verschickt! 📨");
     };
     if (direkt) {
@@ -806,6 +812,34 @@ function seiteFoto(tid, info) {
     knopf.disabled = false;
     if (ergebnis === "geht-nicht") meldung(`<p class="rueckmeldung schlecht">Dieses Gerät kann die Fotos hier nicht verschicken. Zeig Papa einfach dein Blatt.</p>`);
   });
+  ($("#foto-zu") || KEIN).addEventListener("click", schliessen);
+}
+function seiteFoto(tid, info) {
+  const t = tid ? thema(tid) : null;
+  let infoText = "";
+  try { infoText = info ? decodeURIComponent(info) : ""; } catch (_) {}
+  app().innerHTML = `<a class="zurueck" href="${t ? `#/t/${t.id}/plan` : "#/"}">‹ Zurück</a><div id="foto-bereich"></div>`;
+  fotoOberflaeche($("#foto-bereich"), t, infoText, null);
+}
+// Fenster über der aktuellen Aufgabe: Kamera geht sofort auf, danach geht es an derselben Stelle weiter.
+function fotoSchliessen() {
+  const o = $("#foto-overlay");
+  if (!o) return;
+  fotoListe.forEach((f) => URL.revokeObjectURL(f.url));
+  fotoListe = [];
+  o.remove();
+  document.body.style.overflow = "";
+}
+function fotoOverlay(t, infoText) {
+  fotoSchliessen();
+  const o = document.createElement("div");
+  o.id = "foto-overlay";
+  o.className = "overlay";
+  o.innerHTML = `<div class="innen" id="foto-bereich-o"></div>`;
+  document.body.appendChild(o);
+  document.body.style.overflow = "hidden";
+  fotoOberflaeche($("#foto-bereich-o"), t, infoText, fotoSchliessen);
+  $("#foto-input").click();   // noch im Tipp des Kindes, damit Safari die Kamera öffnen darf
 }
 
 // ---------- Bericht für Papa ----------
@@ -866,6 +900,7 @@ function seiteBericht() {
 function route() {
   clearInterval(uhrTimer);
   try { speechSynthesis.cancel(); } catch (_) {}
+  fotoSchliessen();
   const p = location.hash.replace(/^#\/?/, "").split("?")[0].split("/").filter(Boolean);
   window.scrollTo(0, 0);
   if (p[0] === "bericht") return seiteBericht();
