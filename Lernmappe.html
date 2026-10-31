@@ -194,7 +194,7 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const app = () => $("#app");
 
 // ---------- Fortschritt (bleibt in diesem Browser gespeichert) ----------
-let S = { plan: {}, quiz: {}, karten: {}, uebung: {}, probe: {}, log: [] };
+let S = { plan: {}, quiz: {}, karten: {}, uebung: {}, probe: {}, diktat: {}, log: [] };
 function ladeFortschritt() {
   try {
     let roh = localStorage.getItem(SPEICHER);
@@ -244,6 +244,7 @@ function linkZu(t, ziel) {
   // ziel: "quiz:id", "karten:id", "ueben:id", "merk", "probe"
   const [art, id] = String(ziel).split(":");
   if (art === "merk") return `#/t/${t.id}/merk`;
+  if (art === "korrektur") return `#/t/${t.id}/korrektur`;
   if (art === "probe") return id ? `#/t/${t.id}/probe/${id}` : `#/t/${t.id}/probe`;
   return `#/t/${t.id}/${art}/${id}`;
 }
@@ -277,9 +278,9 @@ function seiteStart() {
 }
 
 // ---------- Thema ----------
-const REITER = [["plan", "Lernplan"], ["merk", "Merkzettel"], ["quiz", "Quiz"], ["karten", "Karteikarten"], ["ueben", "Üben"], ["probe", "Probeklausur"], ["korrektur", "Korrekturen"]];
+const REITER = [["plan", "Lernplan"], ["merk", "Merkzettel"], ["quiz", "Quiz"], ["karten", "Karteikarten"], ["ueben", "Üben"], ["diktat", "Diktate"], ["probe", "Probeklausur"], ["korrektur", "Korrekturen"]];
 function themaKopf(t, aktiv) {
-  const vorhanden = { plan: t.lernplan?.length, merk: t.merkzettel?.length, quiz: t.quizze?.length, karten: t.karten?.length, ueben: t.uebungen?.length, probe: proben(t).length, korrektur: t.korrekturen?.length };
+  const vorhanden = { plan: t.lernplan?.length, merk: t.merkzettel?.length, quiz: t.quizze?.length, karten: t.karten?.length, ueben: t.uebungen?.length, diktat: t.diktate?.length, probe: proben(t).length, korrektur: t.korrekturen?.length };
   const tb = t.klausur ? tageBis(t.klausur) : null;
   return `<a class="zurueck" href="#/">‹ Meine Lernmappe</a>
     <div><span class="chip c-${esc(t.farbe || "grau")}">${esc(t.fach)}</span></div>
@@ -321,13 +322,14 @@ function seiteMerk(t) {
 }
 
 function seiteListe(t, art) {
-  const name = { quiz: "quizze", karten: "karten", ueben: "uebungen" }[art];
+  const name = { quiz: "quizze", karten: "karten", ueben: "uebungen", diktat: "diktate" }[art];
   const liste = t[name] || [];
   app().innerHTML = themaKopf(t, art) + `<div class="raster">${liste.map((x) => {
     let info = "";
     if (art === "quiz") { const r = S.quiz[t.id + "/" + x.id]; info = `${x.fragen.length} Fragen${r ? ` · Bestes Ergebnis: <b>${r.beste}/${r.total}</b>` : ""}`; }
     if (art === "karten") { const r = S.karten[t.id + "/" + x.id]; info = `${x.karten.length} Karten${r ? ` · ${r.gewusst.length} gewusst` : ""}`; }
     if (art === "ueben") { const r = S.uebung[t.id + "/" + x.id] || {}; const ok = Object.values(r).filter((v) => v.ok).length; info = `${x.aufgaben.length} Aufgaben${ok ? ` · ${ok} gelöst` : ""}`; }
+    if (art === "diktat") { const r = S.diktat[t.id + "/" + x.id]; info = `${x.teile.length} Abschnitte · 🔊 zum Anhören${r ? ` · ${r.mal}× geschrieben` : ""}`; }
     return `<a class="karte" href="#/t/${t.id}/${art}/${x.id}"><span class="titel">${esc(x.titel)}</span>${x.beschreibung ? `<span class="leise">${fmt(x.beschreibung)}</span>` : ""}<small class="leise">${info}</small></a>`;
   }).join("")}</div>`;
 }
@@ -430,6 +432,7 @@ function seiteUeben(t, uid) {
       ${u.anleitung ? `<p>${fmt(u.anleitung)}</p>` : ""}
       <div class="aufgabe-box">
         <p class="satz">${fmt(a.frage)}</p>
+        ${a.sprich ? `<div class="knoepfe" style="margin:0 0 12px"><button class="btn" id="hoer">🔊 Anhören</button></div>` : ""}
         ${a.optionen ? `<div class="optionen">${a.optionen.map((o, i) => `<button class="option" data-o="${esc(o)}"><span class="buchst">${"ABCDEF"[i]}</span><span>${fmt(o)}</span></button>`).join("")}</div>`
           : `<form class="eingabe-zeile" id="ef"><input id="ein" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${esc(a.platzhalter || "Deine Antwort")}" ${st.ok ? `disabled value="${esc(a.antworten[0])}"` : ""}><button class="btn" ${st.ok ? "disabled" : ""}>Prüfen</button></form>`}
         <div id="rm"></div>
@@ -444,7 +447,8 @@ function seiteUeben(t, uid) {
       </div>`;
     const pruefe = (wert) => {
       st.versuche++;
-      const ok = (a.antworten || []).some((x) => normal(x, genau) === normal(wert, genau));
+      const ok = a.optionen ? (a.antworten || []).includes(wert) : (a.antworten || []).some((x) => normal(x, genau) === normal(wert, genau));
+      if (!ok && wert && !(st.falsch || []).includes(wert)) st.falsch = [...(st.falsch || []), String(wert).slice(0, 40)].slice(-3);
       if (ok) {
         st.ok = true;
         merke(`${t.titel}: „${u.titel}“ Aufgabe ${nr + 1} gelöst (${st.tipps} Tipps, ${st.versuche} Versuche)`);
@@ -460,6 +464,7 @@ function seiteUeben(t, uid) {
     };
     if (a.optionen) $$(".option").forEach((b) => b.addEventListener("click", () => { if (!st.ok) { pruefe(b.dataset.o); if (!st.ok) b.classList.add("falsch"); } }));
     else { $("#ef").addEventListener("submit", (e) => { e.preventDefault(); const v = $("#ein").value; if (v.trim()) pruefe(v); }); if (!st.ok) $("#ein").focus(); }
+    $("#hoer")?.addEventListener("click", () => sprich(a.sprich, 0.8));
     $("#tipp")?.addEventListener("click", () => { st.tipps++; speichern(); zeige(); });
     $("#zeig")?.addEventListener("click", () => { st.loesung = true; merke(`${t.titel}: „${u.titel}“ Aufgabe ${nr + 1} Lösung angesehen`); zeige(); });
     $("#zurueck")?.addEventListener("click", () => { nr--; zeige(); });
@@ -600,6 +605,84 @@ function seiteKorrektur(t) {
     <section class="korrektur"><h3>${esc(k.titel)}</h3><p class="leise">${k.datum ? datumLang(k.datum) : ""}${k.punkte ? ` · <b>${esc(k.punkte)}</b>` : ""}</p><p>${fmt(k.text)}</p></section>`).join("");
 }
 
+// ---------- Vorlesen (Sprachausgabe des Geräts, offline, keine KI) ----------
+function deutscheStimme() {
+  try {
+    const v = speechSynthesis.getVoices().filter((x) => /^de/i.test(x.lang));
+    return v.find((x) => /premium|enhanced|erweitert/i.test(x.name)) || v.find((x) => /anna|petra|helena|markus|yannick|katja/i.test(x.name)) || v.find((x) => x.lang === "de-DE") || v[0] || null;
+  } catch (_) { return null; }
+}
+try { speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = () => {}; } catch (_) {}
+function sprich(text, tempo = 0.85, fertig) {
+  if (!("speechSynthesis" in window)) { toast("Dieses Gerät kann leider nicht vorlesen."); return false; }
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "de-DE"; u.rate = tempo;
+  const stimme = deutscheStimme(); if (stimme) u.voice = stimme;
+  if (fertig) u.onend = fertig;
+  speechSynthesis.speak(u);
+  return true;
+}
+function mitSatzzeichen(t) {
+  return t.replace(/„/g, " Anführungszeichen unten, ").replace(/“/g, " Anführungszeichen oben, ")
+    .replace(/,/g, " Komma,").replace(/\./g, " Punkt.").replace(/!/g, " Ausrufezeichen!").replace(/\?/g, " Fragezeichen?").replace(/:/g, " Doppelpunkt:");
+}
+
+// ---------- Diktat: Das Gerät liest Stück für Stück vor, Valentina schreibt auf Papier ----------
+function seiteDiktat(t, did) {
+  const d = (t.diktate || []).find((x) => x.id === did);
+  if (!d) return seiteListe(t, "diktat");
+  const key = t.id + "/" + d.id, ganz = d.teile.join(" ");
+  const opt = S.diktatOpt || (S.diktatOpt = { tempo: 0.8, zeichen: false });
+  let nr = -1;   // -1 = Start, 0..n-1 = Abschnitte, n = fertig
+  const lies = (txt, tempo) => sprich(opt.zeichen ? mitSatzzeichen(txt) : txt, tempo || opt.tempo);
+  const zeige = () => {
+    const n = d.teile.length;
+    let inhalt = "";
+    if (nr < 0) inhalt = `
+      <p>Nimm ein Blatt und einen Stift. Das iPad liest dir den Text vor. Hör dir zuerst alles einmal an, ohne zu schreiben. Dann diktiert es dir Stück für Stück. Jedes Stück kannst du so oft hören, wie du willst.</p>
+      <div class="knoepfe"><button class="btn hell" id="alles">▶ Ganzen Text anhören</button><button class="btn" id="los">✏️ Los geht's</button></div>
+      <details class="profi"><summary>⚙️ Einstellungen</summary>
+        <p><label><input type="radio" name="tempo" value="0.7" ${opt.tempo <= 0.7 ? "checked" : ""}> langsam</label> &nbsp; <label><input type="radio" name="tempo" value="0.8" ${opt.tempo > 0.7 && opt.tempo < 0.9 ? "checked" : ""}> mittel</label> &nbsp; <label><input type="radio" name="tempo" value="0.95" ${opt.tempo >= 0.9 ? "checked" : ""}> normal</label></p>
+        <p><label><input type="checkbox" id="zeichen" ${opt.zeichen ? "checked" : ""}> Satzzeichen ansagen (Komma, Punkt, Anführungszeichen …)</label></p></details>`;
+    else if (nr < n) inhalt = `
+      <p class="leise">Stück ${nr + 1} von ${n}</p>
+      <div class="punkte">${d.teile.map((_, i) => `<i class="${i < nr ? "ok" : i === nr ? "jetzt" : ""}"></i>`).join("")}</div>
+      <div class="aufgabe-box" style="text-align:center"><p class="gross" style="font-size:2.6rem">🔊</p><p class="leise">Hör gut zu und schreib dann. Sprich dabei leise in Silben mit.</p>
+        <div class="knoepfe" style="justify-content:center"><button class="btn" id="nochmal">🔊 Nochmal hören</button></div></div>
+      <div class="knoepfe">${nr > 0 ? `<button class="btn hell" id="zurueck">‹ Zurück</button>` : ""}<button class="btn" id="weiter">${nr + 1 < n ? "Weiter ›" : "Fertig ✓"}</button></div>`;
+    else inhalt = `
+      <div class="erkl gut"><b>Super, du hast das ganze Diktat geschrieben! 🎉</b><br>Jetzt kommt die Fehlerbrille: Hör den Text noch einmal und lies mit dem Finger Wort für Wort mit. Mach einen Bleistiftpunkt unter jedes Wort, bei dem du unsicher bist, und prüf es mit einer Strategie.</div>
+      <div class="knoepfe"><button class="btn hell" id="alles">▶ Ganzen Text noch einmal</button>
+        <a class="btn" href="#/foto/${t.id}/${encodeURIComponent(d.titel)}">📷 Foto an Papa</a>
+        <button class="btn hell" id="text">👀 Text zum Vergleichen</button></div>
+      <div id="vergleich"></div>`;
+    app().innerHTML = themaKopf(t, "diktat") + `<p class="leise">${esc(d.titel)}</p>` + inhalt;
+    $("#alles")?.addEventListener("click", () => lies(ganz, Math.min(1, opt.tempo + 0.1)));
+    $("#los")?.addEventListener("click", () => { nr = 0; zeige(); lies(d.teile[0]); });
+    $$('input[name="tempo"]').forEach((r) => r.addEventListener("change", () => { opt.tempo = +r.value; speichern(); }));
+    $("#zeichen")?.addEventListener("change", (e) => { opt.zeichen = e.target.checked; speichern(); });
+    $("#nochmal")?.addEventListener("click", () => lies(d.teile[nr]));
+    $("#zurueck")?.addEventListener("click", () => { nr--; zeige(); lies(d.teile[nr]); });
+    $("#weiter")?.addEventListener("click", () => {
+      nr++;
+      if (nr >= d.teile.length) {
+        const r = S.diktat[key] || { mal: 0 };
+        S.diktat[key] = { mal: r.mal + 1, zuletzt: Date.now() };
+        merke(`Diktat „${d.titel}“ geschrieben`);
+        speichern();
+        zeige();
+        return;
+      }
+      zeige(); lies(d.teile[nr]);
+    });
+    $("#text")?.addEventListener("click", () => {
+      $("#vergleich").innerHTML = `<div class="aufgabe-box"><p class="leise">Vergleiche Wort für Wort. Jeder gefundene Fehler ist ein Erfolg, denn so lernst du!</p><p style="font-size:1.15rem;line-height:1.8">${esc(ganz)}</p></div>`;
+    });
+  };
+  zeige();
+}
+
 // ---------- Foto an Papa ----------
 // Mit Upload-Adresse (KIND.upload, steht in den verschlüsselten Inhalten) gehen die Fotos direkt in Papas Google Drive.
 // Ohne Upload-Adresse oder wenn das Hochladen scheitert: Teilen-Menü (Nachrichten, Mail, AirDrop).
@@ -715,9 +798,11 @@ function bericht() {
     for (const u of t.uebungen || []) {
       const r = S.uebung[t.id + "/" + u.id]; if (!r) continue;
       const geloest = u.aufgaben.filter((_, i) => r[i]?.ok).length;
-      const schwer = u.aufgaben.map((a, i) => ({ a, r: r[i] })).filter((x) => x.r && (x.r.tipps >= 2 || x.r.versuche >= 3 || x.r.loesung)).map((x) => x.a.strategie || x.a.frage.replace(/\*\*|__|\[\[|\]\]/g, "").slice(0, 40));
+      const schwer = u.aufgaben.map((a, i) => ({ a, r: r[i] })).filter((x) => x.r && (x.r.tipps >= 2 || x.r.versuche >= 3 || x.r.loesung || (x.r.falsch || []).length))
+        .map((x) => `${x.a.antworten?.[0] || x.a.frage.replace(/\*\*|__|\[\[|\]\]/g, "").slice(0, 30)}${(x.r.falsch || []).length ? ` (schrieb: ${x.r.falsch.join(" / ")})` : ""}${x.a.strategie ? ` [${x.a.strategie}]` : ""}`);
       z.push(`Übung „${u.titel}“: ${geloest}/${u.aufgaben.length} gelöst${schwer.length ? `; schwer fiel: ${[...new Set(schwer)].join(", ")}` : ""}`);
     }
+    for (const d of t.diktate || []) { const r = S.diktat[t.id + "/" + d.id]; if (r) z.push(`Diktat „${d.titel}“: ${r.mal}× geschrieben, zuletzt ${new Date(r.zuletzt).toLocaleDateString("de-DE")}`); }
     proben(t).forEach((p, i) => { const st = probeStatus(t, i + 1); if (st) z.push(`Probeklausur „${p.titel}“: ${st}`); });
     z.push("");
   }
@@ -758,6 +843,7 @@ function seiteBericht() {
 // ---------- Navigation ----------
 function route() {
   clearInterval(uhrTimer);
+  try { speechSynthesis.cancel(); } catch (_) {}
   const p = location.hash.replace(/^#\/?/, "").split("?")[0].split("/").filter(Boolean);
   window.scrollTo(0, 0);
   if (p[0] === "bericht") return seiteBericht();
@@ -770,6 +856,7 @@ function route() {
     if (tab === "quiz") return p[3] ? seiteQuiz(t, p[3]) : seiteListe(t, "quiz");
     if (tab === "karten") return p[3] ? seiteKarten(t, p[3]) : seiteListe(t, "karten");
     if (tab === "ueben") return p[3] ? seiteUeben(t, p[3]) : seiteListe(t, "ueben");
+    if (tab === "diktat") return p[3] ? seiteDiktat(t, p[3]) : seiteListe(t, "diktat");
     if (tab === "probe") return seiteProbe(t, p[3]);
     if (tab === "korrektur") return seiteKorrektur(t);
     return seitePlan(t);
@@ -793,7 +880,19 @@ async function entschluesseln(roh) {
   const klar = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64zuBytes(P.iv), additionalData: new TextEncoder().encode("lernmappe-v1") }, key, b64zuBytes(P.daten));
   return new TextDecoder().decode(klar);
 }
+// Geheimer Link: …/Lernmappe.html#k=PASSWORT. Danach den Link sofort aus der Adresszeile entfernen.
+async function linkEntsperren() {
+  const m = location.hash.match(/^#k=([A-Za-z0-9-]+)/);
+  if (!m) return false;
+  history.replaceState(null, "", location.pathname + location.search + "#/");
+  let text = null;
+  try { text = await mitPasswort(m[1]); } catch (_) { seiteSchloss("Der Link hat nicht funktioniert. Gib das Passwort ein."); return true; }
+  loslegen(text);
+  return true;
+}
+function aufLinkWarten() { linkEntsperren(); }
 function loslegen(text) {
+  window.removeEventListener("hashchange", aufLinkWarten);
   new Function(text)();   // legt LM_KIND fest und meldet die Themen mit LM.thema(...) an
   KIND = window.LM_KIND || KIND;
   ladeFortschritt();
@@ -831,14 +930,7 @@ function seiteSchloss(meldung) {
     app().innerHTML = `<p class="rueckmeldung schlecht">Die Lernmappe konnte nicht geladen werden. Bitte lade die Seite neu.</p>`;
     return;
   }
-  // Geheimer Link: …/Lernmappe.html#k=PASSWORT. Danach den Link sofort aus der Adresszeile entfernen.
-  const m = location.hash.match(/^#k=([A-Za-z0-9-]+)/);
-  if (m) {
-    history.replaceState(null, "", location.pathname + location.search + "#/");
-    let text = null;
-    try { text = await mitPasswort(m[1]); } catch (_) { return seiteSchloss("Der Link hat nicht funktioniert. Gib das Passwort ein."); }
-    return loslegen(text);
-  }
+  if (await linkEntsperren()) return;
   let gespeichert = null;
   try { gespeichert = localStorage.getItem(SCHLUESSEL); } catch (_) {}
   if (gespeichert) {
@@ -848,6 +940,7 @@ function seiteSchloss(meldung) {
     if (text !== null) return loslegen(text);
   }
   seiteSchloss();
+  window.addEventListener("hashchange", aufLinkWarten);   // geheimer Link im schon offenen Tab
 })();
 </script>
 </body>
