@@ -163,6 +163,26 @@ a.karte:hover,button.karte:hover{border-color:var(--royal)}
 /* Bericht */
 textarea.bericht{width:100%;min-height:300px;font:inherit;font-size:.95rem;padding:12px;border:1.5px solid var(--line);border-radius:12px;background:#fff;color:var(--ink)}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--green);color:#fff;padding:12px 18px;border-radius:14px;font-weight:700;z-index:9;transition:opacity .5s}
+/* Meine Ergebnisse */
+.ergebnis-knopf{display:flex;justify-content:space-between;align-items:center;gap:12px;background:var(--green-soft);border:2px solid var(--green);color:var(--ink);border-radius:16px;padding:14px 18px;text-decoration:none;margin:10px 0 6px}
+.ergebnis-knopf b{font-family:var(--font-display);font-size:1.12rem;display:block}
+.ergebnis-knopf small{color:var(--ink-soft)}
+.neu-zahl{display:inline-block;background:var(--red);color:#fff;border-radius:999px;padding:2px 10px;font-weight:700;font-size:.88rem;white-space:nowrap;vertical-align:middle}
+.wartet-zahl{display:inline-block;background:var(--panel);color:var(--ink-soft);border-radius:999px;padding:2px 10px;font-weight:700;font-size:.88rem;white-space:nowrap}
+.korrektur.k-richtig{border-left-color:var(--green)}
+.korrektur.k-teilweise{border-left-color:#d99a00}
+.korrektur.k-wartet{border-left-color:var(--line);background:var(--panel)}
+.korrektur h3{display:inline}
+.urteil{display:inline-block;font-weight:700;border-radius:999px;padding:3px 12px;margin:2px 0 10px}
+.urteil.richtig{background:var(--green-soft);color:var(--green)}
+.urteil.teilweise{background:#fff3c4;color:#7a5400}
+.urteil.falsch{background:var(--red-soft);color:var(--red)}
+.k-liste{list-style:none;padding:0;margin:4px 0 12px}
+.k-liste li{padding:8px 12px;border-radius:10px;margin-bottom:6px;background:var(--panel)}
+.k-liste li.ok{background:var(--green-soft)}
+.k-liste li.nein{background:var(--red-soft)}
+.k-liste s{color:var(--red)}
+.neu-banner{position:fixed;right:16px;bottom:16px;z-index:15;background:var(--royal);color:#fff;border:0;border-radius:14px;padding:14px 18px;font-weight:700;box-shadow:0 6px 20px rgba(0,0,0,.25)}
 .fuss{margin-top:40px;padding-top:12px;border-top:2px dashed var(--line);font-size:.88rem;color:var(--ink-soft)}
 
 @media print{
@@ -285,6 +305,7 @@ function seiteStart() {
     </div>
     ${n ? `<a class="weiter" href="#/t/${n.t.id}/plan"><div><small>${esc(n.t.fach)} · Als Nächstes</small><b>${esc(n.s.titel)}</b></div><span class="pfeil">›</span></a>`
         : LM.themen.length ? `<p class="hand">Alles erledigt, was heute dran ist. Super! 🎉</p>` : ""}
+    ${ergebnisKnopf()}
     <h2>Meine Themen</h2>
     ${themen.length ? `<div class="raster">${themen.map((t) => {
       const f = fortschritt(t), tb = t.klausur ? tageBis(t.klausur) : null;
@@ -297,7 +318,7 @@ function seiteStart() {
       : `<p class="leise">Noch keine Themen in der Mappe. Papa legt sie mit Claude an.</p>`}
     <div class="fuss">
       <p>Diese Lernmappe hat Papa mit Claude für dich vorbereitet. Hier ist keine KI drin. Deine Ergebnisse bleiben auf deinem Gerät, bis du sie Papa schickst.</p>
-      <p><a href="#/foto">📷 Foto an Papa schicken</a> · <a href="#/bericht">✉️ Fortschritt an Papa schicken</a></p>
+      <p><a href="#/foto">📷 Foto an Papa schicken</a> · <a href="#/ergebnisse">📬 Meine Ergebnisse</a> · <a href="#/bericht">✉️ Fortschritt an Papa schicken</a></p>
     </div>`;
   breite(app());
 }
@@ -501,7 +522,7 @@ function seiteUeben(t, uid) {
     const r = S.uebung[key], ok = u.aufgaben.filter((_, i) => (r[i] || {}).ok).length;
     app().innerHTML = themaKopf(t, "ueben") + `<div class="ergebnis"><div class="gross">${ok} / ${u.aufgaben.length}</div>
       <p class="hand">${ok === u.aufgaben.length ? "Alle Aufgaben gelöst! 🏆" : "Gut gearbeitet! Die offenen Aufgaben kannst du später nochmal probieren."}</p>
-      <div class="knoepfe" style="justify-content:center"><a class="btn hell" href="#/t/${t.id}/ueben">Andere Übung</a><a class="btn" href="#/t/${t.id}/plan">Zum Lernplan</a></div></div>`;
+      <div class="knoepfe" style="justify-content:center"><a class="btn hell" href="#/t/${t.id}/ueben">Andere Übung</a><a class="btn" href="#/t/${t.id}/plan">Zum Lernplan</a>${(S.gesendet || []).length ? `<a class="btn hell" href="#/ergebnisse">📬 Meine Ergebnisse</a>` : ""}</div></div>`;
   };
   zeige();
 }
@@ -627,9 +648,119 @@ function seiteProbe(t, nrText) {
   if (offen && !offen.fertig && Date.now() - offen.gestartet < (dauer + 900) * 1000) lauf();
 }
 
+// ---------- Meine Ergebnisse: Korrekturen zu den Fotos ----------
+// Korrektur-Felder: datum, titel, punkte, text; neu und freiwillig: bezug (Kennung der Sendung, Text oder Liste),
+// ergebnis ("richtig" | "teilweise" | "falsch") und aufgaben [{ text, deins, richtig, ok }].
+const URTEIL = { richtig: "✅ Alles richtig!", teilweise: "🟡 Zum Teil richtig", falsch: "❌ Noch nicht richtig" };
+const nummern = (k) => [].concat(k.bezug || []).map(String);
+const korrSchluessel = (t, k) => k.bezug ? "nr:" + nummern(k).join(",") : `${t.id}|${k.datum || ""}|${k.titel || ""}`;
+const gesehen = () => S.gesehen || (S.gesehen = {});
+function alleKorrekturen() {
+  const liste = [];
+  LM.themen.forEach((t) => (t.korrekturen || []).forEach((k, i) => liste.push({ t, k, i, key: korrSchluessel(t, k) })));
+  return liste.sort((a, b) => String(b.k.datum || "").localeCompare(String(a.k.datum || "")) || b.i - a.i);
+}
+const neueKorrekturen = () => alleKorrekturen().filter((x) => !gesehen()[x.key]).length;
+function wartendeFotos() {
+  const fertig = {};
+  alleKorrekturen().forEach((x) => nummern(x.k).forEach((n) => { fertig[n] = true; }));
+  return (S.gesendet || []).filter((s) => !fertig[s.nr] && Date.now() - s.t < 21 * 864e5).slice().reverse();
+}
+const wann = (ms) => new Date(ms).toLocaleString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+function ergebnisKnopf() {
+  const neu = neueKorrekturen(), warten = wartendeFotos().length;
+  return `<a class="ergebnis-knopf" href="#/ergebnisse"><div><b>📬 Meine Ergebnisse</b><small>Hier siehst du, was richtig war</small></div>
+    <span>${neu ? `<span class="neu-zahl">${neu} neu</span>` : warten ? `<span class="wartet-zahl">⏳ ${warten} wird korrigiert</span>` : `<span class="pfeil">›</span>`}</span></a>`;
+}
+function korrekturKarte(t, k, neu, mitFach) {
+  const urteil = URTEIL[k.ergebnis];
+  const zeile = (a) => a.ok
+    ? `<li class="ok">✅ ${a.text ? `<b>${fmt(a.text)}</b> ` : ""}${a.deins || a.richtig ? `${fmt(a.deins || a.richtig)} – richtig!` : "Richtig!"}</li>`
+    : `<li class="nein">❌ ${a.text ? `<b>${fmt(a.text)}</b><br>` : ""}${a.deins ? `Du hast geschrieben: <s>${fmt(a.deins)}</s><br>` : ""}Richtig ist: <mark>${fmt(a.richtig || "")}</mark></li>`;
+  return `<section class="korrektur ${URTEIL[k.ergebnis] ? "k-" + k.ergebnis : ""}">
+    ${neu ? `<span class="neu-zahl">Neu</span> ` : ""}<h3>${esc(k.titel)}</h3>
+    <p class="leise">${mitFach ? `${esc(t.fach)} · ` : ""}${k.datum ? datumLang(k.datum) : ""}${k.punkte ? ` · <b>${esc(k.punkte)}</b>` : ""}</p>
+    ${urteil ? `<div class="urteil ${k.ergebnis}">${urteil}</div>` : ""}
+    ${(k.aufgaben || []).length ? `<ul class="k-liste">${k.aufgaben.map(zeile).join("")}</ul>` : ""}
+    ${k.text ? `<p>${fmt(k.text)}</p>` : ""}
+    ${k.ergebnis && k.ergebnis !== "richtig" && (t.uebungen || []).length ? `<div class="knoepfe"><a class="btn hell" href="#/t/${t.id}/ueben">✏️ Nochmal üben</a></div>` : ""}
+  </section>`;
+}
 function seiteKorrektur(t) {
-  app().innerHTML = themaKopf(t, "korrektur") + (t.korrekturen || []).map((k) => `
-    <section class="korrektur"><h3>${esc(k.titel)}</h3><p class="leise">${k.datum ? datumLang(k.datum) : ""}${k.punkte ? ` · <b>${esc(k.punkte)}</b>` : ""}</p><p>${fmt(k.text)}</p></section>`).join("");
+  const g = gesehen(), liste = (t.korrekturen || []).slice().reverse();
+  app().innerHTML = themaKopf(t, "korrektur") + liste.map((k) => korrekturKarte(t, k, !g[korrSchluessel(t, k)], false)).join("");
+  liste.forEach((k) => { g[korrSchluessel(t, k)] = true; });
+  speichern();
+}
+function seiteErgebnisse() {
+  const g = gesehen(), warten = wartendeFotos();
+  const alle = alleKorrekturen().sort((a, b) => (g[a.key] ? 1 : 0) - (g[b.key] ? 1 : 0));   // Neues zuerst
+  app().innerHTML = `<a class="zurueck" href="#/">‹ Meine Lernmappe</a><h1>📬 Meine Ergebnisse</h1>
+    <p>Hier siehst du, was Claude zu deinen Fotos sagt: was richtig war und wie es richtig heißt. Meist ist die Korrektur nach ein bis zwei Stunden da. Die Lernmappe schaut von selbst nach, du musst nichts neu öffnen.</p>
+    <div class="knoepfe"><button class="btn hell" id="nachsehen">↻ Jetzt nachsehen</button></div>
+    ${warten.length ? `<h2>Wird noch korrigiert ⏳</h2>${warten.map((s) => `<section class="korrektur k-wartet"><h3>${esc(s.was)}</h3>
+      <p class="leise">Geschickt ${wann(s.t)} · ${s.n} ${s.n === 1 ? "Foto" : "Fotos"} · Nr. ${esc(s.nr)}</p><p>Claude schaut sich das an. Schau später nochmal vorbei! 👀</p></section>`).join("")}` : ""}
+    <h2>Korrigiert</h2>
+    ${alle.length ? alle.map((x) => korrekturKarte(x.t, x.k, !g[x.key], true)).join("")
+      : `<p class="leise">Noch keine Korrekturen. Schick Papa ein Foto von deinem Blatt, dann steht hier bald, was richtig war.</p>`}`;
+  alle.forEach((x) => { g[x.key] = true; });
+  speichern();
+  neuBanner(false);
+  $("#nachsehen").addEventListener("click", async (e) => {
+    const b = e.currentTarget;
+    b.disabled = true; b.textContent = "Schaue nach …";
+    if (!(await nachNeuemSehen(true))) { b.disabled = false; b.textContent = "↻ Jetzt nachsehen"; toast("Noch nichts Neues. Schau später nochmal!"); }
+  });
+}
+
+// ---------- Neues von Papa: Inhalte im Hintergrund nachladen, ohne die Lernmappe neu zu öffnen ----------
+let SCHLUESSEL_ROH = null, sucheLaeuft = false, letzteSuche = 0;
+async function nachNeuemSehen(sofort) {
+  if (!SCHLUESSEL_ROH || sucheLaeuft || (!sofort && Date.now() - letzteSuche < 30000)) return false;
+  sucheLaeuft = true;
+  letzteSuche = Date.now();
+  try {
+    const antwort = await fetch(`daten/paket.js?stand=${Date.now()}`, { cache: "no-store" });
+    if (!antwort.ok) return false;
+    const m = (await antwort.text()).match(/LM_PAKET\s*=\s*(\{[\s\S]*\})\s*;/);
+    if (!m) return false;
+    const neu = JSON.parse(m[1]), alt = window.LM_PAKET;
+    if (!neu.daten || neu.iv === alt.iv) return false;
+    window.LM_PAKET = neu;
+    let text;
+    try { text = await entschluesseln(SCHLUESSEL_ROH); } catch (_) { window.LM_PAKET = alt; return false; }
+    const vorher = neueKorrekturen();
+    if (inhaltAnwenden(text)) { history.replaceState(null, "", location.pathname + location.search + "#/"); route(); return true; }
+    auffrischen(neueKorrekturen() > vorher);
+    return true;
+  } catch (_) { return false; }
+  finally { sucheLaeuft = false; }
+}
+// Ruhige Seiten (Start, Ergebnisse) neu zeichnen. Sonst nicht stören, nur ein Hinweis unten rechts.
+function auffrischen(mehrNeue) {
+  const seite = location.hash.replace(/^#\/?/, "").split("/")[0];
+  const ruhig = !$("#foto-overlay") && (seite === "" || seite === "ergebnisse");
+  if (ruhig) { const y = window.pageYOffset; route(); window.scrollTo(0, y); }
+  const uhrLaeuft = $("#leiste") && !$("#leiste").hidden;
+  if (mehrNeue && seite !== "" && seite !== "ergebnisse" && !uhrLaeuft) neuBanner(true);   // auf der Startseite zeigt der Knopf die Zahl
+}
+function neuBanner(zeigen) {
+  const alt = $("#neu-banner");
+  if (alt) alt.remove();
+  if (!zeigen) return;
+  const b = document.createElement("button");
+  b.id = "neu-banner";
+  b.className = "neu-banner nicht-drucken";
+  b.textContent = "📬 Neues Ergebnis da! Ansehen ›";
+  b.addEventListener("click", () => { b.remove(); location.hash = "#/ergebnisse"; });
+  document.body.appendChild(b);
+}
+function nachNeuemAchten() {
+  setTimeout(() => nachNeuemSehen(true), 3000);   // gleich nach dem Öffnen: Safari hat das Paket evtl. noch im Zwischenspeicher
+  setInterval(() => { if (!document.hidden) nachNeuemSehen(); }, 3 * 60000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) nachNeuemSehen(); });
+  window.addEventListener("pageshow", (e) => { if (e.persisted) nachNeuemSehen(); });
+  window.addEventListener("focus", () => nachNeuemSehen());
 }
 
 // ---------- Vorlesen (Sprachausgabe des Geräts, offline, keine KI) ----------
@@ -728,9 +859,16 @@ async function verkleinern(datei, max = 2000, qualitaet = 0.85) {
   finally { URL.revokeObjectURL(url); }
 }
 const blobZuB64 = (blob) => new Promise((ok, fehler) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.onerror = fehler; r.readAsDataURL(blob); });
-function fotoName(was, i) {
+// Jede Sendung bekommt eine Kennung (z. B. „Nr. K7QM2“). Die Korrektur nennt sie unter „bezug“, so findet die App sie wieder.
+function neueNr() {
+  const z = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  let n = "";
+  for (let i = 0; i < 5; i++) n += z[Math.floor(Math.random() * z.length)];
+  return n;
+}
+function fotoName(was, i, nr) {
   const d = new Date(), zeit = `${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}`;
-  return `${heuteISO()}_${zeit}_${(was || "Foto").replace(/[^\wäöüÄÖÜß-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60)}_${i + 1}.jpg`;
+  return `${heuteISO()}_${zeit}_${(was || "Foto").replace(/[^\wäöüÄÖÜß-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60)}${nr ? "_Nr-" + nr : ""}_${i + 1}.jpg`;
 }
 async function fotoHochladen(blob, name, was) {
   const antwort = await fetch(KIND.upload.url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
@@ -738,10 +876,10 @@ async function fotoHochladen(blob, name, was) {
   const j = await antwort.json();
   if (!j.ok) throw new Error(j.fehler || "Hochladen hat nicht geklappt");
 }
-async function fotoTeilen(was) {
-  const files = fotoListe.map((f, i) => new File([f.blob], fotoName(was, i), { type: "image/jpeg" }));
+async function fotoTeilen(was, nr) {
+  const files = fotoListe.map((f, i) => new File([f.blob], fotoName(was, i, nr), { type: "image/jpeg" }));
   if (!(navigator.canShare && navigator.canShare({ files }))) return "geht-nicht";
-  try { await navigator.share({ files, title: "Foto für Papa", text: was }); return "ok"; }
+  try { await navigator.share({ files, title: "Foto für Papa", text: `${was} (Nr. ${nr})` }); return "ok"; }
   catch (e) { return e && e.name === "AbortError" ? "abgebrochen" : "geht-nicht"; }
 }
 // Baustein: Kamera, Vorschau und Senden. Läuft als eigene Seite (#/foto) oder als Fenster über einer Aufgabe.
@@ -750,6 +888,7 @@ function fotoOberflaeche(ziel, t, infoText, schliessen) {
   const direkt = !!(KIND.upload && KIND.upload.url);
   fotoListe.forEach((f) => URL.revokeObjectURL(f.url));
   fotoListe = [];
+  let nr = null;   // Kennung der Sendung, gilt auch für „Nochmal versuchen“
   ziel.innerHTML = `
     ${schliessen ? `<div class="knoepfe" style="justify-content:flex-end;margin:0"><button class="btn hell" id="foto-zu">✕ Schließen</button></div>` : ""}
     <h1>📷 Foto an Papa</h1>
@@ -782,12 +921,16 @@ function fotoOberflaeche(ziel, t, infoText, schliessen) {
     const was = $("#foto-was").value.trim() || "Foto";
     const knopf = $("#foto-senden");
     knopf.disabled = true;
+    if (!nr) nr = neueNr();
     const fertig = (wie) => {
+      S.gesendet = (S.gesendet || []).concat([{ nr, t: Date.now(), was, n: fotoListe.length, tid: t ? t.id : "" }]).slice(-100);
+      nr = null;
       merke(`Foto an Papa geschickt (${wie}): ${was}, ${fotoListe.length} ${fotoListe.length === 1 ? "Foto" : "Fotos"}`);
       fotoListe.forEach((f) => URL.revokeObjectURL(f.url));
       fotoListe = [];
       zeigeFotos();
-      meldung(`<div class="erkl gut"><b>Papa hat deine Fotos bekommen! ✅</b><br>Claude schaut sie sich an. Super gemacht!</div>${schliessen ? `<div class="knoepfe"><button class="btn" id="foto-weiter">✓ Weiter</button></div>` : ""}`);
+      meldung(`<div class="erkl gut"><b>Papa hat deine Fotos bekommen! ✅</b><br>Claude schaut sie sich an. Super gemacht! Was richtig war, siehst du bald unter <b>📬 Meine Ergebnisse</b>.</div>
+        <div class="knoepfe">${schliessen ? `<button class="btn" id="foto-weiter">✓ Weiter</button>` : ""}<a class="btn hell" href="#/ergebnisse">📬 Meine Ergebnisse</a></div>`);
       ($("#foto-weiter") || KEIN).addEventListener("click", schliessen);
       toast("Verschickt! 📨");
     };
@@ -795,19 +938,19 @@ function fotoOberflaeche(ziel, t, infoText, schliessen) {
       try {
         for (let i = 0; i < fotoListe.length; i++) {
           meldung(`<p class="leise">Foto ${i + 1} von ${fotoListe.length} wird hochgeladen …</p>`);
-          await fotoHochladen(fotoListe[i].blob, fotoName(was, i), was);
+          await fotoHochladen(fotoListe[i].blob, fotoName(was, i, nr), `${was} (Nr. ${nr})`);
         }
         return fertig("direkt");
       } catch (_) {
         meldung(`<p class="rueckmeldung schlecht">Das Hochladen hat nicht geklappt. Ist das Internet an? Du kannst die Fotos auch über Nachrichten schicken.</p>
           <div class="knoepfe"><button class="btn" id="foto-nochmal">↺ Nochmal versuchen</button><button class="btn hell" id="foto-teilen">📨 Über Nachrichten schicken</button></div>`);
         $("#foto-nochmal").addEventListener("click", () => knopf.click());
-        $("#foto-teilen").addEventListener("click", async () => { if ((await fotoTeilen(was)) === "ok") fertig("Teilen"); });
+        $("#foto-teilen").addEventListener("click", async () => { if ((await fotoTeilen(was, nr)) === "ok") fertig("Teilen"); });
         knopf.disabled = false;
         return;
       }
     }
-    const ergebnis = await fotoTeilen(was);
+    const ergebnis = await fotoTeilen(was, nr);
     if (ergebnis === "ok") return fertig("Teilen");
     knopf.disabled = false;
     if (ergebnis === "geht-nicht") meldung(`<p class="rueckmeldung schlecht">Dieses Gerät kann die Fotos hier nicht verschicken. Zeig Papa einfach dein Blatt.</p>`);
@@ -904,6 +1047,7 @@ function route() {
   const p = location.hash.replace(/^#\/?/, "").split("?")[0].split("/").filter(Boolean);
   window.scrollTo(0, 0);
   if (p[0] === "bericht") return seiteBericht();
+  if (p[0] === "ergebnisse") return seiteErgebnisse();
   if (p[0] === "foto") return seiteFoto(p[1], p[2]);
   if (p[0] === "t") {
     const t = thema(p[1]);
@@ -948,27 +1092,37 @@ async function linkEntsperren() {
   return true;
 }
 function aufLinkWarten() { linkEntsperren(); }
-function loslegen(text) {
-  window.removeEventListener("hashchange", aufLinkWarten);
-  new Function(text)();   // legt LM_KIND fest und meldet die Themen mit LM.thema(...) an
+// Führt die entschlüsselten Inhalte aus. Gibt true zurück, wenn der Fortschritt dabei neu gestartet wurde.
+function inhaltAnwenden(text) {
+  const altThemen = LM.themen, altKind = window.LM_KIND;
+  LM.themen = [];
+  try { new Function(text)(); }   // legt LM_KIND fest und meldet die Themen mit LM.thema(...) an
+  catch (e) { LM.themen = altThemen; window.LM_KIND = altKind; throw e; }
   KIND = window.LM_KIND || KIND;
-  ladeFortschritt();
   // Neustart aus der Ferne: Ist LM_KIND.neustart höher als auf diesem Gerät gespeichert, beginnt der Fortschritt von vorn.
-  const neustart = Number(KIND.neustart || 0);
-  if ((S.neustart || 0) < neustart) {
+  const neustart = Number(KIND.neustart || 0), vonVorn = (S.neustart || 0) < neustart;
+  if (vonVorn) {
     const opt = S.diktatOpt;
     S = { plan: {}, quiz: {}, karten: {}, uebung: {}, probe: {}, diktat: {}, log: [] };
     if (opt) S.diktatOpt = opt;
   }
   S.neustart = neustart;
   speichern();
+  return vonVorn;
+}
+function loslegen(text) {
+  window.removeEventListener("hashchange", aufLinkWarten);
+  ladeFortschritt();
+  inhaltAnwenden(text);
   window.addEventListener("hashchange", route);
   route();
+  nachNeuemAchten();
 }
 // Liefert den Klartext oder wirft bei falschem Passwort. Merkt sich den Schlüssel auf diesem Gerät.
 async function mitPasswort(pw) {
   const roh = await schluesselAusPasswort(pw);
   const text = await entschluesseln(roh);
+  SCHLUESSEL_ROH = roh;
   try { localStorage.setItem(SCHLUESSEL, bytesZuB64(roh)); } catch (_) {}
   return text;
 }
@@ -1002,7 +1156,7 @@ function seiteSchloss(meldung) {
   try { gespeichert = localStorage.getItem(SCHLUESSEL); } catch (_) {}
   if (gespeichert) {
     let text = null;
-    try { text = await entschluesseln(b64zuBytes(gespeichert)); }
+    try { const roh = b64zuBytes(gespeichert); text = await entschluesseln(roh); SCHLUESSEL_ROH = roh; }
     catch (_) { try { localStorage.removeItem(SCHLUESSEL); } catch (_) {} }   // z. B. neues Passwort
     if (text !== null) return loslegen(text);
   }
