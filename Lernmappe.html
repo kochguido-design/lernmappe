@@ -628,7 +628,7 @@ function mitSatzzeichen(t) {
     .replace(/,/g, " Komma,").replace(/\./g, " Punkt.").replace(/!/g, " Ausrufezeichen!").replace(/\?/g, " Fragezeichen?").replace(/:/g, " Doppelpunkt:");
 }
 
-// ---------- Diktat: Das Gerät liest Stück für Stück vor, Valentina schreibt auf Papier ----------
+// ---------- Diktat: Das Gerät liest Stück für Stück vor, das Kind schreibt auf Papier ----------
 function seiteDiktat(t, did) {
   const d = (t.diktate || []).find((x) => x.id === did);
   if (!d) return seiteListe(t, "diktat");
