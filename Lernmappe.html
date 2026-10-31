@@ -182,6 +182,9 @@ textarea.bericht{width:100%;min-height:300px;font:inherit;font-size:.95rem;paddi
 .k-liste li.ok{background:var(--green-soft)}
 .k-liste li.nein{background:var(--red-soft)}
 .k-liste s{color:var(--red)}
+.am-ort{margin:22px 0 8px}
+.am-ort>h3{margin-bottom:10px;color:var(--royal)}
+.ort-hinweis{display:inline-block;margin:0 8px 8px 0;background:var(--green-soft);border:2px solid var(--green);border-radius:12px;padding:6px 12px;font-weight:700}
 .neu-banner{position:fixed;right:16px;bottom:16px;z-index:15;background:var(--royal);color:#fff;border:0;border-radius:14px;padding:14px 18px;font-weight:700;box-shadow:0 6px 20px rgba(0,0,0,.25)}
 .fuss{margin-top:40px;padding-top:12px;border-top:2px dashed var(--line);font-size:.88rem;color:var(--ink-soft)}
 
@@ -316,9 +319,9 @@ function seiteStart() {
         ${f.gesamt ? `<div class="balken"><span data-w="${f.prozent}"></span></div><small class="leise">${f.fertig} von ${f.gesamt} Schritten geschafft</small>` : ""}
       </a>`; }).join("")}</div>`
       : `<p class="leise">Noch keine Themen in der Mappe. Papa legt sie mit Claude an.</p>`}
+    <div class="knoepfe" style="margin-top:28px"><a class="btn" href="#/foto">📷 Foto an Papa schicken</a><a class="btn gut" href="#/ergebnisse">📬 Meine Ergebnisse</a><a class="btn hell" href="#/bericht">✉️ Fortschritt an Papa schicken</a></div>
     <div class="fuss">
       <p>Diese Lernmappe hat Papa mit Claude für dich vorbereitet. Hier ist keine KI drin. Deine Ergebnisse bleiben auf deinem Gerät, bis du sie Papa schickst.</p>
-      <p><a href="#/foto">📷 Foto an Papa schicken</a> · <a href="#/ergebnisse">📬 Meine Ergebnisse</a> · <a href="#/bericht">✉️ Fortschritt an Papa schicken</a></p>
     </div>`;
   breite(app());
 }
@@ -374,8 +377,8 @@ function seiteListe(t, art) {
     let info = "";
     if (art === "quiz") { const r = S.quiz[t.id + "/" + x.id]; info = `${x.fragen.length} Fragen${r ? ` · Bestes Ergebnis: <b>${r.beste}/${r.total}</b>` : ""}`; }
     if (art === "karten") { const r = S.karten[t.id + "/" + x.id]; info = `${x.karten.length} Karten${r ? ` · ${r.gewusst.length} gewusst` : ""}`; }
-    if (art === "ueben") { const r = S.uebung[t.id + "/" + x.id] || {}; const ok = Object.values(r).filter((v) => v.ok).length; info = `${x.aufgaben.length} Aufgaben${ok ? ` · ${ok} gelöst` : ""}`; }
-    if (art === "diktat") { const r = S.diktat[t.id + "/" + x.id]; info = `${x.teile.length} Abschnitte · 🔊 zum Anhören${r ? ` · ${r.mal}× geschrieben` : ""}`; }
+    if (art === "ueben") { const r = S.uebung[t.id + "/" + x.id] || {}; const ok = Object.values(r).filter((v) => v.ok).length; info = `${x.aufgaben.length} Aufgaben${ok ? ` · ${ok} gelöst` : ""}${ortInfo(t, `ueben:${x.id}:`, true)}`; }
+    if (art === "diktat") { const r = S.diktat[t.id + "/" + x.id]; info = `${x.teile.length} Abschnitte · 🔊 zum Anhören${r ? ` · ${r.mal}× geschrieben` : ""}${ortInfo(t, `diktat:${x.id}`)}`; }
     return `<a class="karte" href="#/t/${t.id}/${art}/${x.id}"><span class="titel">${esc(x.titel)}</span>${x.beschreibung ? `<span class="leise">${fmt(x.beschreibung)}</span>` : ""}<small class="leise">${info}</small></a>`;
   }).join("")}</div>`;
 }
@@ -471,8 +474,11 @@ function seiteUeben(t, uid) {
   const zeige = () => {
     const a = u.aufgaben[nr], st = S.uebung[key][nr] || { tipps: 0, versuche: 0 };
     S.uebung[key][nr] = st;
-    const genau = a.genau !== false;
+    const genau = a.genau !== false, ort = `ueben:${u.id}:${nr + 1}`;
+    // Neue Korrekturen bei anderen Aufgaben dieser Übung: Knopf, um direkt hinzuspringen
+    const andere = u.aufgaben.map((_, i) => i).filter((i) => i !== nr && ergebnisseAm(t, `ueben:${u.id}:${i + 1}`).neu);
     app().innerHTML = themaKopf(t, "ueben") + `
+      ${andere.map((i) => `<button class="btn hell ort-hinweis" data-geh="${i}">📬 Neues Ergebnis bei Aufgabe ${i + 1} ›</button>`).join("")}
       <p class="leise">${esc(u.titel)} · Aufgabe ${nr + 1} von ${u.aufgaben.length}</p>
       <div class="punkte">${u.aufgaben.map((_, i) => `<i class="${(S.uebung[key][i] || {}).ok ? "ok" : i === nr ? "jetzt" : ""}"></i>`).join("")}</div>
       ${u.anleitung ? `<p>${fmt(u.anleitung)}</p>` : ""}
@@ -491,7 +497,9 @@ function seiteUeben(t, uid) {
         ${nr > 0 ? `<button class="btn hell" id="zurueck">‹ Zurück</button>` : ""}
         <button class="btn ${st.ok || st.loesung ? "" : "hell"}" id="vor">${nr + 1 < u.aufgaben.length ? "Nächste ›" : "Fertig"}</button>
         <button class="btn hell" id="foto-auf">📷 Handschrift fotografieren</button>
-      </div>`;
+      </div>
+      ${ergebnisBlock(t, ort, `Dein Foto zu Aufgabe ${nr + 1}`)}`;
+    $$("[data-geh]").forEach((b) => b.addEventListener("click", () => { nr = +b.dataset.geh; zeige(); window.scrollTo(0, 0); }));
     const pruefe = (wert) => {
       st.versuche++;
       const ok = a.optionen ? (a.antworten || []).includes(wert) : (a.antworten || []).some((x) => normal(x, genau) === normal(wert, genau));
@@ -516,7 +524,7 @@ function seiteUeben(t, uid) {
     ($("#zeig") || KEIN).addEventListener("click", () => { st.loesung = true; merke(`${t.titel}: „${u.titel}“ Aufgabe ${nr + 1} Lösung angesehen`); zeige(); });
     ($("#zurueck") || KEIN).addEventListener("click", () => { nr--; zeige(); });
     $("#vor").addEventListener("click", () => { if (nr + 1 < u.aufgaben.length) { nr++; zeige(); } else fertig(); });
-    $("#foto-auf").addEventListener("click", () => fotoOverlay(t, `${u.titel}, Aufgabe ${nr + 1}`));
+    $("#foto-auf").addEventListener("click", () => fotoOverlay(t, `${u.titel}, Aufgabe ${nr + 1}`, ort));
   };
   const fertig = () => {
     const r = S.uebung[key], ok = u.aufgaben.filter((_, i) => (r[i] || {}).ok).length;
@@ -566,7 +574,7 @@ function seiteProbe(t, nrText) {
       <p>Hier übst du die Klassenarbeit wie in echt: auf Papier, ohne Hilfe und mit der Uhr.</p>
       <div class="raster">${liste.map((p, i) => `<a class="karte" href="#/t/${t.id}/probe/${i + 1}">
         <span class="titel">${esc(p.titel)}</span><span class="leise">⏱️ ${p.dauer || 30} Minuten</span>
-        <small class="leise">${esc(probeStatus(t, i + 1)) || "Noch nicht geschrieben"}</small></a>`).join("")}</div>`;
+        <small class="leise">${esc(probeStatus(t, i + 1)) || "Noch nicht geschrieben"}${ortInfo(t, `probe:${i + 1}`)}</small></a>`).join("")}</div>`;
     return;
   }
   const n = Math.min(Math.max(parseInt(nrText, 10) || 1, 1), liste.length);
@@ -583,8 +591,9 @@ function seiteProbe(t, nrText) {
         <li>Du hängst fest? Mach erst weiter und komm später zurück.</li>
         <li>Zur Halbzeit solltest du ungefähr in der Mitte sein.</li>
         <li>Heb dir die letzten 5 Minuten zum Kontrollieren auf.</li></ul></details>
-      <div class="knoepfe"><button class="btn" id="start">⏱️ ${minuten} Minuten starten</button><button class="btn hell" id="druck">🖨️ Drucken</button><a class="btn hell" href="#/foto/${t.id}/${encodeURIComponent(p.titel)}">📷 Blatt an Papa</a></div>
+      <div class="knoepfe"><button class="btn" id="start">⏱️ ${minuten} Minuten starten</button><button class="btn hell" id="druck">🖨️ Drucken</button><a class="btn hell" href="#/foto/${t.id}/${encodeURIComponent(p.titel)}/probe:${n}">📷 Blatt an Papa</a></div>
       <div id="probe-ergebnis"></div>
+      ${ergebnisBlock(t, `probe:${n}`, "Korrektur deiner Probeklausur")}
       ${zuletzt ? `<p class="leise klein">Zuletzt: ${esc(zuletzt)}</p>` : ""}
     </div>
     <div class="uhr-leiste nicht-drucken" id="leiste" hidden><span class="uhr" id="uhr"></span><span class="uhr-text" id="uhr-text"></span><button class="btn gut" id="fertig">✋ Ich bin fertig</button></div>
@@ -627,8 +636,8 @@ function seiteProbe(t, nrText) {
       $("#start").hidden = false;
       $("#start").textContent = "⏱️ Nochmal starten";
       $("#probe-ergebnis").innerHTML = r.inZeit
-        ? `<div class="erkl gut"><b>Geschafft in ${r.minuten} von ${minuten} Minuten! 🎉</b><br>Jetzt fotografier dein Blatt und schick es Papa. Claude korrigiert es.</div><div class="knoepfe"><a class="btn" href="#/foto/${t.id}/${encodeURIComponent(p.titel)}">📷 Blatt fotografieren</a></div>`
-        : `<div class="erkl"><b>Du hast ${minutenText(r.minuten - minuten)} länger gebraucht.</b><br>Das ist beim Üben ganz normal. Schick das Blatt trotzdem Papa. Beim nächsten Mal helfen dir die Profi-Tricks.</div><div class="knoepfe"><a class="btn" href="#/foto/${t.id}/${encodeURIComponent(p.titel)}">📷 Blatt fotografieren</a></div>`;
+        ? `<div class="erkl gut"><b>Geschafft in ${r.minuten} von ${minuten} Minuten! 🎉</b><br>Jetzt fotografier dein Blatt und schick es Papa. Claude korrigiert es.</div><div class="knoepfe"><a class="btn" href="#/foto/${t.id}/${encodeURIComponent(p.titel)}/probe:${n}">📷 Blatt fotografieren</a></div>`
+        : `<div class="erkl"><b>Du hast ${minutenText(r.minuten - minuten)} länger gebraucht.</b><br>Das ist beim Üben ganz normal. Schick das Blatt trotzdem Papa. Beim nächsten Mal helfen dir die Profi-Tricks.</div><div class="knoepfe"><a class="btn" href="#/foto/${t.id}/${encodeURIComponent(p.titel)}/probe:${n}">📷 Blatt fotografieren</a></div>`;
       toast("Gut gemacht! ✏️");
       window.scrollTo(0, 0);
     };
@@ -672,7 +681,33 @@ function ergebnisKnopf() {
   return `<a class="ergebnis-knopf" href="#/ergebnisse"><div><b>📬 Meine Ergebnisse</b><small>Hier siehst du, was richtig war</small></div>
     <span>${neu ? `<span class="neu-zahl">${neu} neu</span>` : warten ? `<span class="wartet-zahl">⏳ ${warten} wird korrigiert</span>` : `<span class="pfeil">›</span>`}</span></a>`;
 }
-function korrekturKarte(t, k, neu, mitFach) {
+// Korrekturen und wartende Fotos zu einem Ort. Mit offen=true zählt jeder Ort, der mit ort beginnt (ganze Übung).
+function ergebnisseAm(t, ort, offen) {
+  const passt = (o) => !!o && (offen ? String(o).indexOf(ort) === 0 : o === ort);
+  const sendeOrt = {};
+  (S.gesendet || []).forEach((s) => { if (s.ort) sendeOrt[s.nr] = s.ort; });
+  const korr = (t.korrekturen || []).filter((k) => passt(k.ort) || nummern(k).some((n) => passt(sendeOrt[n])));
+  const warten = wartendeFotos().filter((s) => s.tid === t.id && passt(s.ort));
+  const neu = korr.filter((k) => !gesehen()[korrSchluessel(t, k)]).length;
+  return { korr: korr.slice().reverse(), warten, neu };
+}
+// Kurzinfo für Listen: „📬 1 neu“ oder „⏳ wird korrigiert“
+function ortInfo(t, ort, offen) {
+  const e = ergebnisseAm(t, ort, offen);
+  return e.neu ? ` · <span class="neu-zahl">📬 ${e.neu} neu</span>` : e.warten.length ? " · ⏳ Foto wird korrigiert" : e.korr.length ? " · 📬 korrigiert" : "";
+}
+const warteKarte = (s) => `<section class="korrektur k-wartet"><h3>${esc(s.was)}</h3>
+  <p class="leise">Geschickt ${wann(s.t)} · ${s.n} ${s.n === 1 ? "Foto" : "Fotos"} · Nr. ${esc(s.nr)}</p><p>Claude schaut sich das an. Schau später nochmal vorbei! 👀</p></section>`;
+// Block direkt in der Übung, im Diktat oder in der Probeklausur. Was hier gezeigt wird, gilt als gesehen.
+function ergebnisBlock(t, ort, ueberschrift) {
+  const e = ergebnisseAm(t, ort), g = gesehen();
+  if (!e.korr.length && !e.warten.length) return "";
+  const html = `<div class="am-ort"><h3>📬 ${esc(ueberschrift)}</h3>${e.warten.map(warteKarte).join("")}${e.korr.map((k) => korrekturKarte(t, k, !g[korrSchluessel(t, k)], false, true)).join("")}</div>`;
+  e.korr.forEach((k) => { g[korrSchluessel(t, k)] = true; });
+  speichern();
+  return html;
+}
+function korrekturKarte(t, k, neu, mitFach, ohneUebenKnopf) {
   const urteil = URTEIL[k.ergebnis];
   const zeile = (a) => a.ok
     ? `<li class="ok">✅ ${a.text ? `<b>${fmt(a.text)}</b> ` : ""}${a.deins || a.richtig ? `${fmt(a.deins || a.richtig)} – richtig!` : "Richtig!"}</li>`
@@ -683,7 +718,7 @@ function korrekturKarte(t, k, neu, mitFach) {
     ${urteil ? `<div class="urteil ${k.ergebnis}">${urteil}</div>` : ""}
     ${(k.aufgaben || []).length ? `<ul class="k-liste">${k.aufgaben.map(zeile).join("")}</ul>` : ""}
     ${k.text ? `<p>${fmt(k.text)}</p>` : ""}
-    ${k.ergebnis && k.ergebnis !== "richtig" && (t.uebungen || []).length ? `<div class="knoepfe"><a class="btn hell" href="#/t/${t.id}/ueben">✏️ Nochmal üben</a></div>` : ""}
+    ${!ohneUebenKnopf && k.ergebnis && k.ergebnis !== "richtig" && (t.uebungen || []).length ? `<div class="knoepfe"><a class="btn hell" href="#/t/${t.id}/ueben">✏️ Nochmal üben</a></div>` : ""}
   </section>`;
 }
 function seiteKorrektur(t) {
@@ -698,8 +733,7 @@ function seiteErgebnisse() {
   app().innerHTML = `<a class="zurueck" href="#/">‹ Meine Lernmappe</a><h1>📬 Meine Ergebnisse</h1>
     <p>Hier siehst du, was Claude zu deinen Fotos sagt: was richtig war und wie es richtig heißt. Meist ist die Korrektur nach ein bis zwei Stunden da. Die Lernmappe schaut von selbst nach, du musst nichts neu öffnen.</p>
     <div class="knoepfe"><button class="btn hell" id="nachsehen">↻ Jetzt nachsehen</button></div>
-    ${warten.length ? `<h2>Wird noch korrigiert ⏳</h2>${warten.map((s) => `<section class="korrektur k-wartet"><h3>${esc(s.was)}</h3>
-      <p class="leise">Geschickt ${wann(s.t)} · ${s.n} ${s.n === 1 ? "Foto" : "Fotos"} · Nr. ${esc(s.nr)}</p><p>Claude schaut sich das an. Schau später nochmal vorbei! 👀</p></section>`).join("")}` : ""}
+    ${warten.length ? `<h2>Wird noch korrigiert ⏳</h2>${warten.map(warteKarte).join("")}` : ""}
     <h2>Korrigiert</h2>
     ${alle.length ? alle.map((x) => korrekturKarte(x.t, x.k, !g[x.key], true)).join("")
       : `<p class="leise">Noch keine Korrekturen. Schick Papa ein Foto von deinem Blatt, dann steht hier bald, was richtig war.</p>`}`;
@@ -815,7 +849,7 @@ function seiteDiktat(t, did) {
         <button class="btn" id="foto-auf">📷 Diktat fotografieren</button>
         <button class="btn hell" id="text">👀 Text zum Vergleichen</button></div>
       <div id="vergleich"></div>`;
-    app().innerHTML = themaKopf(t, "diktat") + `<p class="leise">${esc(d.titel)}</p>` + inhalt;
+    app().innerHTML = themaKopf(t, "diktat") + `<p class="leise">${esc(d.titel)}</p>` + inhalt + (nr < 0 || nr >= n ? ergebnisBlock(t, `diktat:${d.id}`, "Dein Diktat-Foto") : "");
     ($("#alles") || KEIN).addEventListener("click", () => lies(ganz, Math.min(1, opt.tempo + 0.1)));
     ($("#los") || KEIN).addEventListener("click", () => { nr = 0; zeige(); lies(d.teile[0]); });
     $$('input[name="tempo"]').forEach((r) => r.addEventListener("change", () => { opt.tempo = +r.value; speichern(); }));
@@ -834,7 +868,7 @@ function seiteDiktat(t, did) {
       }
       zeige(); lies(d.teile[nr]);
     });
-    ($("#foto-auf") || KEIN).addEventListener("click", () => fotoOverlay(t, d.titel));
+    ($("#foto-auf") || KEIN).addEventListener("click", () => fotoOverlay(t, d.titel, `diktat:${d.id}`));
     ($("#text") || KEIN).addEventListener("click", () => {
       $("#vergleich").innerHTML = `<div class="aufgabe-box"><p class="leise">Vergleiche Wort für Wort. Jeder gefundene Fehler ist ein Erfolg, denn so lernst du!</p><p style="font-size:1.15rem;line-height:1.8">${esc(ganz)}</p></div>`;
     });
@@ -876,14 +910,15 @@ async function fotoHochladen(blob, name, was) {
   const j = await antwort.json();
   if (!j.ok) throw new Error(j.fehler || "Hochladen hat nicht geklappt");
 }
-async function fotoTeilen(was, nr) {
+async function fotoTeilen(was, nr, ort) {
   const files = fotoListe.map((f, i) => new File([f.blob], fotoName(was, i, nr), { type: "image/jpeg" }));
   if (!(navigator.canShare && navigator.canShare({ files }))) return "geht-nicht";
-  try { await navigator.share({ files, title: "Foto für Papa", text: `${was} (Nr. ${nr})` }); return "ok"; }
+  try { await navigator.share({ files, title: "Foto für Papa", text: `${was} (Nr. ${nr}${ort ? `, Ort ${ort}` : ""})` }); return "ok"; }
   catch (e) { return e && e.name === "AbortError" ? "abgebrochen" : "geht-nicht"; }
 }
 // Baustein: Kamera, Vorschau und Senden. Läuft als eigene Seite (#/foto) oder als Fenster über einer Aufgabe.
-function fotoOberflaeche(ziel, t, infoText, schliessen) {
+// ort sagt, wo das Foto entstand: "ueben:<id>:<aufgabe>", "diktat:<id>" oder "probe:<nr>". Dort erscheint später auch die Korrektur.
+function fotoOberflaeche(ziel, t, infoText, schliessen, ort) {
   const vorschlag = [t ? `${t.fach}: ${t.titel}` : "", infoText].filter(Boolean).join(" – ");
   const direkt = !!(KIND.upload && KIND.upload.url);
   fotoListe.forEach((f) => URL.revokeObjectURL(f.url));
@@ -923,7 +958,7 @@ function fotoOberflaeche(ziel, t, infoText, schliessen) {
     knopf.disabled = true;
     if (!nr) nr = neueNr();
     const fertig = (wie) => {
-      S.gesendet = (S.gesendet || []).concat([{ nr, t: Date.now(), was, n: fotoListe.length, tid: t ? t.id : "" }]).slice(-100);
+      S.gesendet = (S.gesendet || []).concat([{ nr, t: Date.now(), was, n: fotoListe.length, tid: t ? t.id : "", ort: ort || "" }]).slice(-100);
       nr = null;
       merke(`Foto an Papa geschickt (${wie}): ${was}, ${fotoListe.length} ${fotoListe.length === 1 ? "Foto" : "Fotos"}`);
       fotoListe.forEach((f) => URL.revokeObjectURL(f.url));
@@ -938,31 +973,31 @@ function fotoOberflaeche(ziel, t, infoText, schliessen) {
       try {
         for (let i = 0; i < fotoListe.length; i++) {
           meldung(`<p class="leise">Foto ${i + 1} von ${fotoListe.length} wird hochgeladen …</p>`);
-          await fotoHochladen(fotoListe[i].blob, fotoName(was, i, nr), `${was} (Nr. ${nr})`);
+          await fotoHochladen(fotoListe[i].blob, fotoName(was, i, nr), `${was} (Nr. ${nr}${ort ? `, Ort ${ort}` : ""})`);
         }
         return fertig("direkt");
       } catch (_) {
         meldung(`<p class="rueckmeldung schlecht">Das Hochladen hat nicht geklappt. Ist das Internet an? Du kannst die Fotos auch über Nachrichten schicken.</p>
           <div class="knoepfe"><button class="btn" id="foto-nochmal">↺ Nochmal versuchen</button><button class="btn hell" id="foto-teilen">📨 Über Nachrichten schicken</button></div>`);
         $("#foto-nochmal").addEventListener("click", () => knopf.click());
-        $("#foto-teilen").addEventListener("click", async () => { if ((await fotoTeilen(was, nr)) === "ok") fertig("Teilen"); });
+        $("#foto-teilen").addEventListener("click", async () => { if ((await fotoTeilen(was, nr, ort)) === "ok") fertig("Teilen"); });
         knopf.disabled = false;
         return;
       }
     }
-    const ergebnis = await fotoTeilen(was, nr);
+    const ergebnis = await fotoTeilen(was, nr, ort);
     if (ergebnis === "ok") return fertig("Teilen");
     knopf.disabled = false;
     if (ergebnis === "geht-nicht") meldung(`<p class="rueckmeldung schlecht">Dieses Gerät kann die Fotos hier nicht verschicken. Zeig Papa einfach dein Blatt.</p>`);
   });
   ($("#foto-zu") || KEIN).addEventListener("click", schliessen);
 }
-function seiteFoto(tid, info) {
+function seiteFoto(tid, info, ortText) {
   const t = tid ? thema(tid) : null;
-  let infoText = "";
-  try { infoText = info ? decodeURIComponent(info) : ""; } catch (_) {}
+  let infoText = "", ort = "";
+  try { infoText = info ? decodeURIComponent(info) : ""; ort = ortText ? decodeURIComponent(ortText) : ""; } catch (_) {}
   app().innerHTML = `<a class="zurueck" href="${t ? `#/t/${t.id}/plan` : "#/"}">‹ Zurück</a><div id="foto-bereich"></div>`;
-  fotoOberflaeche($("#foto-bereich"), t, infoText, null);
+  fotoOberflaeche($("#foto-bereich"), t, infoText, null, ort);
 }
 // Fenster über der aktuellen Aufgabe: Kamera geht sofort auf, danach geht es an derselben Stelle weiter.
 function fotoSchliessen() {
@@ -973,7 +1008,7 @@ function fotoSchliessen() {
   o.remove();
   document.body.style.overflow = "";
 }
-function fotoOverlay(t, infoText) {
+function fotoOverlay(t, infoText, ort) {
   fotoSchliessen();
   const o = document.createElement("div");
   o.id = "foto-overlay";
@@ -981,7 +1016,7 @@ function fotoOverlay(t, infoText) {
   o.innerHTML = `<div class="innen" id="foto-bereich-o"></div>`;
   document.body.appendChild(o);
   document.body.style.overflow = "hidden";
-  fotoOberflaeche($("#foto-bereich-o"), t, infoText, fotoSchliessen);
+  fotoOberflaeche($("#foto-bereich-o"), t, infoText, fotoSchliessen, ort);
   $("#foto-input").click();   // noch im Tipp des Kindes, damit Safari die Kamera öffnen darf
 }
 
@@ -1048,7 +1083,7 @@ function route() {
   window.scrollTo(0, 0);
   if (p[0] === "bericht") return seiteBericht();
   if (p[0] === "ergebnisse") return seiteErgebnisse();
-  if (p[0] === "foto") return seiteFoto(p[1], p[2]);
+  if (p[0] === "foto") return seiteFoto(p[1], p[2], p[3]);
   if (p[0] === "t") {
     const t = thema(p[1]);
     if (!t) return seiteStart();
