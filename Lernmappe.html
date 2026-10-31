@@ -80,6 +80,21 @@ a.karte:hover,button.karte:hover{border-color:var(--royal)}
 .schritt.fertig{background:var(--green-soft);border-color:transparent}
 .schritt.fertig .stitel{text-decoration:line-through;color:var(--ink-soft)}
 .schritt.heute{border-color:var(--royal);box-shadow:0 0 0 2px var(--royal-soft)}
+.schritt.jetzt{display:block;cursor:default;border:2.5px solid var(--royal);box-shadow:0 4px 18px rgba(35,67,166,.15);padding:16px 18px;margin:14px 0}
+.schritt.jetzt .jetzt-etikett{display:inline-block;background:var(--royal);color:#fff;border-radius:999px;padding:2px 12px;font-weight:700;font-size:.85rem;margin-bottom:6px}
+.schritt.jetzt .stitel{font-family:var(--font-display);font-size:1.2rem;font-weight:700}
+.schritt.jetzt ul{list-style:none;padding:0;margin:10px 0 0}
+.schritt.jetzt li{padding:8px 10px;border-radius:10px;margin-bottom:6px;background:var(--panel)}
+.schritt.jetzt li.ok{background:var(--green-soft)}
+.schritt.jetzt li .warum{display:block;font-size:.88rem;color:var(--ink-soft);margin-left:28px}
+.schritt.jetzt li label{cursor:pointer;display:flex;gap:8px;align-items:flex-start}
+.schritt.grau{opacity:.5;filter:grayscale(1);cursor:default}
+.schritt.grau.fertig{opacity:.6}
+.schritt.grau a{pointer-events:none;color:inherit;font-weight:400}
+.weitere{margin-top:26px;opacity:.75}
+.weitere>summary{cursor:pointer;font-weight:700;color:var(--ink-soft);padding:8px 0}
+.weitere .karte{background:var(--panel)}
+.schloss-hinweis{color:var(--ink-soft);font-size:.92rem;margin-top:14px}
 .stitel{font-weight:700}
 .schritt ul{margin:4px 0 0;padding-left:20px}
 .schritt li a{font-weight:600}
@@ -274,13 +289,14 @@ function tagesstand() {
     (t.lernplan || []).forEach((s, i) => {
       const abgehakt = !!(S.plan[t.id] || {})[i];
       if (s.datum === heute) ziele.push({ thema: `${t.fach}: ${t.titel}`, titel: s.titel, dauer: s.dauer || 20, abgehakt,
-        aufgaben: (s.aufgaben || []).map((a) => ({ text: ohneZeichen(a.text).slice(0, 160), erledigt: a.ziel ? !!tg.ziele[a.ziel] : null })) });
+        aufgaben: (s.aufgaben || []).map((a, j) => ({ text: ohneZeichen(a.text).slice(0, 160), erledigt: aufgabeStand(t, i, j).ok })) });
       else if (s.datum && s.datum < heute && !abgehakt && (!t.klausur || t.klausur >= heute)) offen.push(`${t.titel}, ${datumKurz(s.datum)}: ${s.titel}`);
     });
     (t.korrekturen || []).forEach((k) => { if (k.datum === heute) korrekturen.push({ titel: k.titel, ergebnis: k.ergebnis || "", punkte: k.punkte || "" }); });
     if (t.klausur && t.klausur >= heute) klausuren.push({ titel: `${t.fach}: ${t.titel}`, datum: t.klausur, tage: tageBis(t.klausur) });
   });
-  return { datum: heute, name: KIND.name, minuten: Math.round(tg.sekunden / 60), tag: tg, ziele, offen, korrekturen, klausuren, gesendetUm: new Date().toLocaleTimeString("de-DE") };
+  const aktuell = LM.themen.map((t) => { const i = aktuellerSchritt(t); return i < 0 ? null : { thema: `${t.fach}: ${t.titel}`, titel: t.lernplan[i].titel, datum: t.lernplan[i].datum || "" }; }).filter(Boolean);
+  return { aktuell, datum: heute, name: KIND.name, minuten: Math.round(tg.sekunden / 60), tag: tg, ziele, offen, korrekturen, klausuren, gesendetUm: new Date().toLocaleTimeString("de-DE") };
 }
 let standTimer = null, standSeit = 0;
 function standPlanen() {
@@ -343,7 +359,7 @@ function naechsterSchritt() {
   const aktiv = LM.themen.filter((t) => !t.klausur || tageBis(t.klausur) >= 0);
   aktiv.sort((a, b) => (a.klausur || "9999").localeCompare(b.klausur || "9999"));
   for (const t of aktiv) {
-    const i = (t.lernplan || []).findIndex((s, i) => !(S.plan[t.id] || {})[i] && (!s.datum || s.datum <= heute));
+    const i = aktuellerSchritt(t);
     if (i >= 0) return { t, i, s: t.lernplan[i] };
   }
   return null;
@@ -398,51 +414,189 @@ function themaKopf(t, aktiv) {
     <nav class="reiter">${REITER.filter(([k]) => vorhanden[k]).map(([k, n]) => `<a href="#/t/${t.id}/${k}" class="${k === aktiv ? "aktiv" : ""}">${n}</a>`).join("")}</nav>`;
 }
 
+// ---------- Tag für Tag: immer nur der nächste Lernplan-Schritt ist offen ----------
+// Ein Schritt ist fertig, wenn alle Aufgaben erledigt und fehlerfrei sind. Dann schließt das Kind ihn ab,
+// und der nächste Schritt wird frei, auch vor seinem Datum. Inhalte späterer Schritte bleiben versteckt.
+const fettTitel = (txt) => (String(txt || "").match(/\*\*(.+?)\*\*/g) || []).map((x) => x.slice(2, -2).trim());
+function aktuellerSchritt(t) {
+  const plan = t.lernplan || [];
+  return plan.findIndex((_, i) => !(S.plan[t.id] || {})[i]);   // -1 = alles geschafft
+}
+function stufe(t, i) {
+  S.stufen = S.stufen || {};
+  const k = t.id + "/" + i;
+  return S.stufen[k] || (S.stufen[k] = {});
+}
+// Etwas wurde geschafft (z. B. Quiz ohne Fehler): beim aktuellen Schritt eintragen, wenn er dieses Ziel hat.
+function zielGeschafft(t, ziel, zusatz) {
+  const i = aktuellerSchritt(t);
+  if (!t || i < 0) return;
+  (t.lernplan[i].aufgaben || []).forEach((a) => {
+    if (a.ziel === ziel || (a.ziel === "probe" && String(ziel).indexOf("probe:") === 0)) stufe(t, i)[a.ziel + (zusatz || "")] = true;
+  });
+  speichern();
+}
+function uebungSauber(t, id) {
+  const u = (t.uebungen || []).find((x) => x.id === id);
+  if (!u) return true;
+  const r = S.uebung[t.id + "/" + id] || {};
+  return u.aufgaben.every((_, i) => (r[i] || {}).sauber);
+}
+function zielVorhanden(t, ziel) {
+  const [art, id] = String(ziel).split(":");
+  if (art === "quiz") return (t.quizze || []).some((x) => x.id === id);
+  if (art === "karten") return (t.karten || []).some((x) => x.id === id);
+  if (art === "ueben") return (t.uebungen || []).some((x) => x.id === id);
+  if (art === "diktat") return (t.diktate || []).some((x) => x.id === id);
+  if (art === "probe") return proben(t).length > 0;
+  return true;
+}
+// Ist Aufgabe j von Schritt i erledigt? Liefert { ok, warum } (warum = was noch fehlt)
+function aufgabeStand(t, i, j) {
+  const a = t.lernplan[i].aufgaben[j], st = stufe(t, i), ziel = a.ziel;
+  if (!ziel) return { ok: !!st["frei:" + j], warum: "Hak es ab, wenn du es gemacht hast." };
+  if (!zielVorhanden(t, ziel)) return { ok: true };
+  const art = String(ziel).split(":")[0], id = String(ziel).split(":")[1];
+  if (art === "ueben") {
+    const ok = uebungSauber(t, id), r = S.uebung[t.id + "/" + id] || {}, u = t.uebungen.find((x) => x.id === id);
+    const offen = u.aufgaben.filter((_, k) => !(r[k] || {}).sauber).length;
+    return { ok, warum: `Noch ${offen} ${offen === 1 ? "Aufgabe" : "Aufgaben"} fehlerfrei schaffen.` };
+  }
+  if (art === "quiz") return { ok: !!st[ziel], warum: "Schaff das Quiz einmal ohne Fehler." };
+  if (art === "karten") return { ok: !!st[ziel], warum: "Wisse alle Karten beim ersten Mal." };
+  if (art === "merk") return { ok: !!st[ziel], warum: "Lies die Merkzettel." };
+  if (art === "korrektur") return { ok: !!st[ziel], warum: "Schau dir deine Korrekturen an." };
+  if (art === "diktat") {
+    const g = st[ziel + "#geschrieben"], f = st[ziel + "#foto"];
+    return { ok: !!(g && f), warum: !g ? "Schreib das Diktat bis zum Ende." : "Lade ein Foto von deinem Diktat hoch." };
+  }
+  if (art === "probe") {
+    const g = st[ziel + "#fertig"], f = st[ziel + "#foto"];
+    return { ok: !!(g && f), warum: !g ? "Schreib die Probeklausur mit der Uhr bis „Ich bin fertig“." : "Lade ein Foto von deinem Blatt hoch." };
+  }
+  return { ok: !!st[ziel], warum: "" };
+}
+function schrittFertig(t, i) { return (t.lernplan[i].aufgaben || []).every((_, j) => aufgabeStand(t, i, j).ok); }
+// Zu welchen Schritten gehört ein Inhalt? Schlüssel wie "quiz:mix", "merk:3" (Index des Merkzettels), "probe:1"
+function zuordnung(t) {
+  const m = {};
+  const dazu = (k, i) => { (m[k] = m[k] || []).push(i); };
+  (t.lernplan || []).forEach((s, i) => (s.aufgaben || []).forEach((a) => {
+    if (!a.ziel) return;
+    if (a.ziel === "merk") {
+      const titel = fettTitel(a.text);
+      (t.merkzettel || []).forEach((z, k) => { if (titel.indexOf(z.titel) >= 0) dazu("merk:" + k, i); });
+    } else if (a.ziel === "probe") proben(t).forEach((_, k) => dazu("probe:" + (k + 1), i));
+    else dazu(a.ziel, i);
+  }));
+  return m;
+}
+// "jetzt" (aktueller Schritt), "frueher" (schon geschafft), "spaeter" (noch gesperrt) oder "extra" (gehört zu keinem Schritt)
+function inhaltStatus(t, key) {
+  const schritte = zuordnung(t)[key], cur = aktuellerSchritt(t);
+  if (!schritte) return "extra";
+  if (cur < 0) return "frueher";
+  if (schritte.indexOf(cur) >= 0) return "jetzt";
+  return schritte.some((i) => i < cur) ? "frueher" : "spaeter";
+}
+function seiteGesperrt(t) {
+  const cur = aktuellerSchritt(t);
+  app().innerHTML = themaKopf(t, "plan") + `<div class="ergebnis"><div class="gross">🔒</div>
+    <p class="hand">Das kommt an einem späteren Tag dran.</p>
+    <p>Mach zuerst ${cur >= 0 ? `<b>${esc(t.lernplan[cur].titel)}</b>` : "den aktuellen Tag"} fertig. Danach geht es weiter!</p>
+    <div class="knoepfe" style="justify-content:center"><a class="btn" href="#/t/${t.id}/plan">Zum Lernplan</a></div></div>`;
+}
+function tagAbschliessen(t, i) {
+  S.plan[t.id] = S.plan[t.id] || {};
+  S.plan[t.id][i] = true;
+  tag().schritte.push(t.lernplan[i].titel);
+  merke(`${t.titel}: Schritt „${t.lernplan[i].titel}“ fehlerfrei abgeschlossen`);
+  toast("Tag geschafft! 🎉");
+}
+
 function seitePlan(t) {
-  const f = fortschritt(t), heute = heuteISO();
+  const f = fortschritt(t), heute = heuteISO(), cur = aktuellerSchritt(t);
+  const plan = t.lernplan || [];
+  const titelZeile = (s, i) => `${s.datum ? datumKurz(s.datum) + ": " : `Schritt ${i + 1}: `}${esc(s.titel)} <span class="leise klein">· ca. ${s.dauer || 20} Min.</span>`;
+  const jetzt = (s, i) => {
+    const staende = (s.aufgaben || []).map((_, j) => aufgabeStand(t, i, j)), offen = staende.filter((x) => !x.ok).length;
+    return `<div class="schritt jetzt" id="jetzt">
+      <span class="jetzt-etikett">Jetzt dran</span>
+      <div class="stitel">${titelZeile(s, i)}</div>
+      <ul>${(s.aufgaben || []).map((a, j) => {
+        const st = staende[j];
+        if (!a.ziel) return `<li class="${st.ok ? "ok" : ""}"><label><input type="checkbox" data-frei="${j}" ${st.ok ? "checked" : ""}><span>${fmt(a.text)}</span></label></li>`;
+        return `<li class="${st.ok ? "ok" : ""}">${st.ok ? "✅" : "⭕"} <a href="${linkZu(t, a.ziel)}">${fmt(a.text)}</a>${st.ok ? "" : `<span class="warum">${esc(st.warum)}</span>`}</li>`;
+      }).join("")}</ul>
+      ${offen ? `<p class="leise" style="margin-top:10px">Noch ${offen} ${offen === 1 ? "Aufgabe" : "Aufgaben"}. Wenn alles fehlerfrei ist, schließt du den Tag ab und der nächste wird frei.</p>`
+        : `<div class="knoepfe"><button class="btn gut" id="abschliessen">🎉 Tag abschließen</button></div>`}
+    </div>`;
+  };
   app().innerHTML = themaKopf(t, "plan") + `
     ${t.einleitung ? `<p>${fmt(t.einleitung)}</p>` : ""}
-    <div class="balken"><span data-w="${f.prozent}"></span></div><p class="leise klein">${f.fertig} von ${f.gesamt} Schritten geschafft</p>
-    ${(t.lernplan || []).map((s, i) => `
-      <label class="schritt ${(S.plan[t.id] || {})[i] ? "fertig" : ""} ${s.datum === heute ? "heute" : ""}">
-        <input type="checkbox" data-i="${i}" ${(S.plan[t.id] || {})[i] ? "checked" : ""}>
-        <div><div class="stitel">${s.datum ? datumKurz(s.datum) + ": " : `Schritt ${i + 1}: `}${esc(s.titel)} <span class="leise klein">· ca. ${s.dauer || 20} Min.</span></div>
-        <ul>${(s.aufgaben || []).map((a) => `<li>${a.ziel ? `<a href="${linkZu(t, a.ziel)}">${fmt(a.text)}</a>` : fmt(a.text)}</li>`).join("")}</ul></div>
-      </label>`).join("")}
+    <div class="balken"><span data-w="${f.prozent}"></span></div><p class="leise klein">${f.fertig} von ${f.gesamt} Tagen geschafft</p>
+    ${cur < 0 && plan.length ? `<p class="hand">Du hast alle Tage geschafft! 🏆</p>` : ""}
+    ${plan.map((s, i) => {
+      if (i === cur) return jetzt(s, i);
+      const fertig = (S.plan[t.id] || {})[i];
+      return `<div class="schritt grau ${fertig ? "fertig" : ""}"><span>${fertig ? "✅" : "🔒"}</span>
+        <div><div class="stitel">${titelZeile(s, i)}</div>${fertig ? "" : `<small class="leise">Wird frei, wenn der Tag davor geschafft ist.</small>`}</div></div>`;
+    }).join("")}
     <div class="knoepfe nicht-drucken"><a class="btn hell" href="#/foto/${t.id}">📷 Blatt oder Rechnung hochladen</a></div>`;
-  $$(".schritt input").forEach((cb) => cb.addEventListener("change", () => {
-    S.plan[t.id] = S.plan[t.id] || {};
-    S.plan[t.id][cb.dataset.i] = cb.checked;
-    if (cb.checked) { tag().schritte.push(t.lernplan[cb.dataset.i].titel); merke(`${t.titel}: Schritt „${t.lernplan[cb.dataset.i].titel}“ erledigt`); toast("Abgehakt! ✅"); } else speichern();
+  $$("[data-frei]").forEach((cb) => cb.addEventListener("change", () => {
+    stufe(t, cur)["frei:" + cb.dataset.frei] = cb.checked;
+    speichern();
     seitePlan(t);
   }));
+  ($("#abschliessen") || KEIN).addEventListener("click", () => {
+    tagAbschliessen(t, cur);
+    seitePlan(t);
+    const naechster = aktuellerSchritt(t);
+    if (naechster >= 0) $("#jetzt").insertAdjacentHTML("beforebegin", `<div class="erkl gut"><b>Super, Tag geschafft! 🎉</b><br>Jetzt ist <b>${esc(plan[naechster].titel)}</b> frei. Du kannst gleich weitermachen oder morgen.</div>`);
+  });
   breite(app());
 }
 
 function seiteMerk(t) {
   tag().ziele.merk = true;
-  speichern();
-  app().innerHTML = themaKopf(t, "merk") + (t.merkzettel || []).map((m) => `
+  zielGeschafft(t, "merk");
+  const alle = (t.merkzettel || []).map((m, k) => ({ m, st: inhaltStatus(t, "merk:" + k) }));
+  const jetzt = alle.filter((x) => x.st === "jetzt"), weitere = alle.filter((x) => x.st === "frueher" || x.st === "extra");
+  const gesperrt = alle.filter((x) => x.st === "spaeter").length;
+  const zettel = (m) => `
     <section class="merk c-${esc(m.farbe || "grau")}">
       <h3>${esc(m.titel)}</h3>
       ${m.frage ? `<p class="leise"><i>${fmt(m.frage)}</i></p>` : ""}
       <p>${fmt(m.text)}</p>
       ${(m.beispiele || []).length ? `<div class="beispiele">${m.beispiele.map((b) => `<span>${fmt(b)}</span>`).join("")}</div>` : ""}
-    </section>`).join("") + `<div class="knoepfe nicht-drucken"><button class="btn hell" id="druck">🖨️ Merkzettel drucken</button></div>`;
+    </section>`;
+  app().innerHTML = themaKopf(t, "merk")
+    + (jetzt.length ? jetzt.map((x) => zettel(x.m)).join("") : `<p>Für deinen aktuellen Tag gibt es keinen neuen Merkzettel.</p>`)
+    + (weitere.length ? `<details class="weitere"><summary>Weitere Merkzettel zum Nachlesen (${weitere.length})</summary>${weitere.map((x) => zettel(x.m)).join("")}</details>` : "")
+    + (gesperrt ? `<p class="schloss-hinweis">🔒 ${gesperrt} weitere Merkzettel ${gesperrt === 1 ? "kommt" : "kommen"} an den nächsten Tagen dran.</p>` : "")
+    + `<div class="knoepfe nicht-drucken"><button class="btn hell" id="druck">🖨️ Merkzettel drucken</button></div>`;
   $("#druck").addEventListener("click", () => window.print());
 }
 
 function seiteListe(t, art) {
   const name = { quiz: "quizze", karten: "karten", ueben: "uebungen", diktat: "diktate" }[art];
-  const liste = t[name] || [];
-  app().innerHTML = themaKopf(t, art) + `<div class="raster">${liste.map((x) => {
+  const alle = t[name] || [];
+  const status = (x) => inhaltStatus(t, `${art}:${x.id}`);
+  const liste = alle.filter((x) => status(x) === "jetzt"), weitere = alle.filter((x) => status(x) === "frueher" || status(x) === "extra");
+  const gesperrt = alle.filter((x) => status(x) === "spaeter").length, cur = aktuellerSchritt(t);
+  const karte = (x) => {
     let info = "";
     if (art === "quiz") { const r = S.quiz[t.id + "/" + x.id]; info = `${x.fragen.length} Fragen${r ? ` · Bestes Ergebnis: <b>${r.beste}/${r.total}</b>` : ""}`; }
     if (art === "karten") { const r = S.karten[t.id + "/" + x.id]; info = `${x.karten.length} Karten${r ? ` · ${r.gewusst.length} gewusst` : ""}`; }
     if (art === "ueben") { const r = S.uebung[t.id + "/" + x.id] || {}; const ok = Object.values(r).filter((v) => v.ok).length; info = `${x.aufgaben.length} Aufgaben${ok ? ` · ${ok} gelöst` : ""}${ortInfo(t, `ueben:${x.id}:`, true)}`; }
     if (art === "diktat") { const r = S.diktat[t.id + "/" + x.id]; info = `${x.teile.length} Abschnitte · 🔊 zum Anhören${r ? ` · ${r.mal}× geschrieben` : ""}${ortInfo(t, `diktat:${x.id}`)}`; }
-    return `<a class="karte" href="#/t/${t.id}/${art}/${x.id}"><span class="titel">${esc(x.titel)}</span>${x.beschreibung ? `<span class="leise">${fmt(x.beschreibung)}</span>` : ""}<small class="leise">${info}</small></a>`;
-  }).join("")}</div>`;
+    const fertigZeichen = art === "ueben" && uebungSauber(t, x.id) ? "✅ " : "";
+    return `<a class="karte" href="#/t/${t.id}/${art}/${x.id}"><span class="titel">${fertigZeichen}${esc(x.titel)}</span>${x.beschreibung ? `<span class="leise">${fmt(x.beschreibung)}</span>` : ""}<small class="leise">${info}</small></a>`;
+  };
+  app().innerHTML = themaKopf(t, art) + (cur >= 0 ? `<p class="leise">Heute dran: <b>${esc(t.lernplan[cur].titel)}</b></p>` : "")
+    + (liste.length ? `<div class="raster">${liste.map(karte).join("")}</div>` : `<p>Für deinen aktuellen Tag gibt es hier nichts zu tun. Schau in den <a href="#/t/${t.id}/plan">Lernplan</a>.</p>`)
+    + (weitere.length ? `<details class="weitere"><summary>Freiwillige Extras und Wiederholung (${weitere.length})</summary><div class="raster">${weitere.map(karte).join("")}</div></details>` : "")
+    + (gesperrt ? `<p class="schloss-hinweis">🔒 ${gesperrt} weitere ${gesperrt === 1 ? "kommt" : "kommen"} an den nächsten Tagen dran.</p>` : "");
 }
 
 // ---------- Quiz ----------
@@ -483,6 +637,7 @@ function seiteQuiz(t, qid) {
     tg.quizFragen += total;
     tg.quizFalsch += total - richtig;
     tg.ziele["quiz:" + q.id] = true;
+    if (richtig === total) zielGeschafft(t, "quiz:" + q.id);
     falsch.forEach((x) => fehlerMerken({ wo: `Quiz „${q.titel}“`, thema: x }));
     merke(`${t.titel}: Quiz „${q.titel}“ ${richtig}/${total}${falsch.length ? ` (Fehler bei: ${falsch.join(", ")})` : ""}`);
     const anteil = richtig / total;
@@ -522,6 +677,7 @@ function seiteKarten(t, kid) {
     tg.karten += k.karten.length;
     tg.kartenGewusst += ersterVersuch.size;
     tg.ziele["karten:" + k.id] = true;
+    if (ersterVersuch.size === k.karten.length) zielGeschafft(t, "karten:" + k.id);
     merke(`${t.titel}: Karteikarten „${k.titel}“ – ${ersterVersuch.size}/${k.karten.length} beim ersten Mal gewusst`);
     app().innerHTML = themaKopf(t, "karten") + `<div class="ergebnis"><div class="gross">${ersterVersuch.size} / ${k.karten.length}</div>
       <p class="hand">So viele wusstest du beim ersten Mal. Alle Karten sind durch! 🎉</p>
@@ -582,6 +738,7 @@ function seiteUeben(t, uid) {
       if (!ok && wert && !(st.falsch || []).includes(wert)) st.falsch = [...(st.falsch || []), String(wert).slice(0, 40)].slice(-3);
       if (ok) {
         st.ok = true;
+        if (st.versuche === 1 && !st.loesung) st.sauber = true;   // beim ersten Versuch, ohne Lösung anzusehen
         merke(`${t.titel}: „${u.titel}“ Aufgabe ${nr + 1} gelöst (${st.tipps} Tipps, ${st.versuche} Versuche)`);
         speichern();
         zeige();
@@ -599,14 +756,27 @@ function seiteUeben(t, uid) {
     ($("#tipp") || KEIN).addEventListener("click", () => { st.tipps++; speichern(); zeige(); });
     ($("#zeig") || KEIN).addEventListener("click", () => { st.loesung = true; tag().loesungen++; merke(`${t.titel}: „${u.titel}“ Aufgabe ${nr + 1} Lösung angesehen`); zeige(); });
     ($("#zurueck") || KEIN).addEventListener("click", () => { nr--; zeige(); });
-    $("#vor").addEventListener("click", () => { if (nr + 1 < u.aufgaben.length) { nr++; zeige(); } else fertig(); });
+    // Weiter zur nächsten noch offenen Aufgabe (in der Fehler-Runde werden gelöste übersprungen)
+    $("#vor").addEventListener("click", () => {
+      const naechste = u.aufgaben.findIndex((_, i) => i > nr && !(S.uebung[key][i] || {}).ok);
+      if (naechste >= 0) { nr = naechste; zeige(); } else fertig();
+    });
     $("#foto-auf").addEventListener("click", () => fotoOverlay(t, `${u.titel}, Aufgabe ${nr + 1}`, ort));
   };
   const fertig = () => {
     const r = S.uebung[key], ok = u.aufgaben.filter((_, i) => (r[i] || {}).ok).length;
-    app().innerHTML = themaKopf(t, "ueben") + `<div class="ergebnis"><div class="gross">${ok} / ${u.aufgaben.length}</div>
-      <p class="hand">${ok === u.aufgaben.length ? "Alle Aufgaben gelöst! 🏆" : "Gut gearbeitet! Die offenen Aufgaben kannst du später nochmal probieren."}</p>
+    const nochmal = u.aufgaben.map((_, i) => i).filter((i) => !(r[i] || {}).sauber);
+    app().innerHTML = themaKopf(t, "ueben") + `<div class="ergebnis"><div class="gross">${u.aufgaben.length - nochmal.length} / ${u.aufgaben.length}</div>
+      <p class="hand">${!nochmal.length ? "Alles fehlerfrei! 🏆 Super!" : `${ok === u.aufgaben.length ? "Alle gelöst, toll! 🌟" : "Gut gearbeitet! 💪"} ${nochmal.length} ${nochmal.length === 1 ? "Aufgabe musst" : "Aufgaben musst"} du noch einmal ohne Fehler schaffen.`}</p>
+      ${nochmal.length ? `<div class="knoepfe" style="justify-content:center"><button class="btn gut" id="fehlerrunde">🔁 Fehler-Runde (${nochmal.length})</button></div>` : ""}
       <div class="knoepfe" style="justify-content:center"><a class="btn hell" href="#/t/${t.id}/ueben">Andere Übung</a><a class="btn" href="#/t/${t.id}/plan">Zum Lernplan</a>${(S.gesendet || []).length ? `<a class="btn hell" href="#/ergebnisse">📬 Meine Ergebnisse</a>` : ""}</div></div>`;
+    ($("#fehlerrunde") || KEIN).addEventListener("click", () => {
+      nochmal.forEach((i) => { r[i] = { tipps: 0, versuche: 0, falsch: (r[i] || {}).falsch }; });
+      merke(`${t.titel}: „${u.titel}“ Fehler-Runde mit ${nochmal.length} Aufgaben`);
+      nr = nochmal[0];
+      zeige();
+      window.scrollTo(0, 0);
+    });
   };
   zeige();
 }
@@ -645,10 +815,14 @@ function probeStatus(t, n) {
 function seiteProbe(t, nrText) {
   const liste = proben(t);
   if (!liste.length) return seitePlan(t);
+  if (nrText && inhaltStatus(t, "probe:" + (parseInt(nrText, 10) || 1)) === "spaeter") return seiteGesperrt(t);
+  const offeneProben = liste.map((p, i) => i).filter((i) => inhaltStatus(t, "probe:" + (i + 1)) !== "spaeter");
+  if (!nrText && liste.length > 1 && offeneProben.length === 1) nrText = String(offeneProben[0] + 1);
+  if (!nrText && liste.length > 1 && !offeneProben.length) return seiteGesperrt(t);
   if (!nrText && liste.length > 1) {
     app().innerHTML = themaKopf(t, "probe") + `
       <p>Hier übst du die Klassenarbeit wie in echt: auf Papier, ohne Hilfe und mit der Uhr.</p>
-      <div class="raster">${liste.map((p, i) => `<a class="karte" href="#/t/${t.id}/probe/${i + 1}">
+      <div class="raster">${liste.map((p, i) => inhaltStatus(t, "probe:" + (i + 1)) === "spaeter" ? "" : `<a class="karte" href="#/t/${t.id}/probe/${i + 1}">
         <span class="titel">${esc(p.titel)}</span><span class="leise">⏱️ ${p.dauer || 30} Minuten</span>
         <small class="leise">${esc(probeStatus(t, i + 1)) || "Noch nicht geschrieben"}${ortInfo(t, `probe:${i + 1}`)}</small></a>`).join("")}</div>`;
     return;
@@ -709,6 +883,7 @@ function seiteProbe(t, nrText) {
       tag().proben.push({ titel: p.titel, minuten: r.minuten, von: minuten, inZeit: r.inZeit });
       tag().ziele.probe = true;
       tag().ziele["probe:" + n] = true;
+      zielGeschafft(t, "probe:" + n, "#fertig");
       merke(`${t.titel}: Probeklausur „${p.titel}“ in ${r.minuten} von ${minuten} Minuten ${r.inZeit ? "geschafft" : "(Zeit überschritten)"}`);
       speichern();
       $("#leiste").hidden = true;
@@ -802,6 +977,7 @@ function korrekturKarte(t, k, neu, mitFach, ohneUebenKnopf) {
 }
 function seiteKorrektur(t) {
   tag().ziele.korrektur = true;
+  zielGeschafft(t, "korrektur");
   const g = gesehen(), liste = (t.korrekturen || []).slice().reverse();
   app().innerHTML = themaKopf(t, "korrektur") + liste.map((k) => korrekturKarte(t, k, !g[korrSchluessel(t, k)], false)).join("");
   liste.forEach((k) => { g[korrSchluessel(t, k)] = true; });
@@ -943,6 +1119,7 @@ function seiteDiktat(t, did) {
         S.diktat[key] = { mal: r.mal + 1, zuletzt: Date.now() };
         tag().diktate++;
         tag().ziele["diktat:" + d.id] = true;
+        zielGeschafft(t, "diktat:" + d.id, "#geschrieben");
         merke(`Diktat „${d.titel}“ geschrieben`);
         speichern();
         zeige();
@@ -1041,6 +1218,7 @@ function fotoOberflaeche(ziel, t, infoText, schliessen, ort) {
     if (!nr) nr = neueNr();
     const fertig = (wie) => {
       tag().fotos += fotoListe.length;
+      if (t && ort && /^(diktat|probe):/.test(ort)) zielGeschafft(t, ort, "#foto");
       S.gesendet = (S.gesendet || []).concat([{ nr, t: Date.now(), was, n: fotoListe.length, tid: t ? t.id : "", ort: ort || "" }]).slice(-100);
       nr = null;
       merke(`Foto hochgeladen (${wie}): ${was}, ${fotoListe.length} ${fotoListe.length === 1 ? "Foto" : "Fotos"}`);
@@ -1172,6 +1350,7 @@ function route() {
     if (!t) return seiteStart();
     const tab = p[2] || "plan";
     if (tab === "merk") return seiteMerk(t);
+    if (p[3] && ["quiz", "karten", "ueben", "diktat"].indexOf(tab) >= 0 && inhaltStatus(t, `${tab}:${p[3]}`) === "spaeter") return seiteGesperrt(t);
     if (tab === "quiz") return p[3] ? seiteQuiz(t, p[3]) : seiteListe(t, "quiz");
     if (tab === "karten") return p[3] ? seiteKarten(t, p[3]) : seiteListe(t, "karten");
     if (tab === "ueben") return p[3] ? seiteUeben(t, p[3]) : seiteListe(t, "ueben");
