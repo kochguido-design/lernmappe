@@ -253,7 +253,67 @@ function ladeFortschritt() {
   } catch (_) {}
 }
 function speichern() { try { localStorage.setItem(SPEICHER, JSON.stringify(S)); } catch (_) {} }
-function merke(text) { S.log.push({ t: Date.now(), text }); if (S.log.length > 300) S.log = S.log.slice(-300); speichern(); }
+function merke(text) { S.log.push({ t: Date.now(), text }); if (S.log.length > 300) S.log = S.log.slice(-300); speichern(); standPlanen(); }
+
+// ---------- Tagesstand: was heute geschafft wurde (für den Abendbericht an die Eltern) ----------
+function tag() {
+  const d = heuteISO();
+  S.tage = S.tage || {};
+  if (!S.tage[d]) {
+    S.tage[d] = { sekunden: 0, geloest: 0, versuche: 0, fehler: 0, loesungen: 0, quizFragen: 0, quizFalsch: 0, karten: 0, kartenGewusst: 0, diktate: 0, proben: [], fotos: 0, ziele: {}, schritte: [], fehlerListe: [] };
+    Object.keys(S.tage).sort().slice(0, -21).forEach((k) => { delete S.tage[k]; });   // nur die letzten 3 Wochen behalten
+  }
+  return S.tage[d];
+}
+function fehlerMerken(eintrag) { const tg = tag(); if (tg.fehlerListe.length < 40) tg.fehlerListe.push(eintrag); }
+const ohneZeichen = (x) => String(x || "").replace(/\*\*|__|\[\[|\]\]/g, "").replace(/\n/g, " ");
+// Zusammenfassung für heute: Tagesziele aus dem Lernplan, Lernzeit, Fehler, neue Korrekturen
+function tagesstand() {
+  const heute = heuteISO(), tg = tag(), ziele = [], offen = [], korrekturen = [], klausuren = [];
+  LM.themen.forEach((t) => {
+    (t.lernplan || []).forEach((s, i) => {
+      const abgehakt = !!(S.plan[t.id] || {})[i];
+      if (s.datum === heute) ziele.push({ thema: `${t.fach}: ${t.titel}`, titel: s.titel, dauer: s.dauer || 20, abgehakt,
+        aufgaben: (s.aufgaben || []).map((a) => ({ text: ohneZeichen(a.text).slice(0, 160), erledigt: a.ziel ? !!tg.ziele[a.ziel] : null })) });
+      else if (s.datum && s.datum < heute && !abgehakt && (!t.klausur || t.klausur >= heute)) offen.push(`${t.titel}, ${datumKurz(s.datum)}: ${s.titel}`);
+    });
+    (t.korrekturen || []).forEach((k) => { if (k.datum === heute) korrekturen.push({ titel: k.titel, ergebnis: k.ergebnis || "", punkte: k.punkte || "" }); });
+    if (t.klausur && t.klausur >= heute) klausuren.push({ titel: `${t.fach}: ${t.titel}`, datum: t.klausur, tage: tageBis(t.klausur) });
+  });
+  return { datum: heute, name: KIND.name, minuten: Math.round(tg.sekunden / 60), tag: tg, ziele, offen, korrekturen, klausuren, gesendetUm: new Date().toLocaleTimeString("de-DE") };
+}
+let standTimer = null, standSeit = 0;
+function standPlanen() {
+  if (!(KIND.upload && KIND.upload.url)) return;
+  if (!standSeit) standSeit = Date.now();
+  clearTimeout(standTimer);
+  if (Date.now() - standSeit > 10 * 60000) return standSenden();   // bei langem Lernen spätestens alle 10 Minuten
+  standTimer = setTimeout(standSenden, 60000);
+}
+function standSenden() {
+  clearTimeout(standTimer);
+  standTimer = null;
+  standSeit = 0;
+  if (!(KIND.upload && KIND.upload.url) || !S.tage) return;
+  try {
+    const body = JSON.stringify({ token: KIND.upload.token, art: "stand", datum: heuteISO(), stand: tagesstand(), bericht: bericht() });
+    fetch(KIND.upload.url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body, keepalive: body.length < 60000 }).catch(() => {});
+  } catch (_) {}
+}
+// Lernzeit: zählt, solange das Kind in den letzten 3 Minuten etwas getippt hat oder die Probeklausur-Uhr läuft
+let letzteAktion = Date.now();
+function lernzeitStarten() {
+  ["click", "keydown", "touchstart", "input"].forEach((ev) => document.addEventListener(ev, () => { letzteAktion = Date.now(); }, true));
+  setInterval(() => {
+    const uhr = $("#leiste") && !$("#leiste").hidden;
+    if (document.hidden || !(uhr || Date.now() - letzteAktion < 180000)) return;
+    tag().sekunden += 30;
+    speichern();
+    standPlanen();
+  }, 30000);
+  document.addEventListener("visibilitychange", () => { if (document.hidden && standTimer) standSenden(); });
+  window.addEventListener("pagehide", () => { if (standTimer) standSenden(); });
+}
 
 // ---------- Hilfen ----------
 const esc = (s) => String(s === undefined || s === null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -353,13 +413,15 @@ function seitePlan(t) {
   $$(".schritt input").forEach((cb) => cb.addEventListener("change", () => {
     S.plan[t.id] = S.plan[t.id] || {};
     S.plan[t.id][cb.dataset.i] = cb.checked;
-    if (cb.checked) { merke(`${t.titel}: Schritt „${t.lernplan[cb.dataset.i].titel}“ erledigt`); toast("Abgehakt! ✅"); } else speichern();
+    if (cb.checked) { tag().schritte.push(t.lernplan[cb.dataset.i].titel); merke(`${t.titel}: Schritt „${t.lernplan[cb.dataset.i].titel}“ erledigt`); toast("Abgehakt! ✅"); } else speichern();
     seitePlan(t);
   }));
   breite(app());
 }
 
 function seiteMerk(t) {
+  tag().ziele.merk = true;
+  speichern();
   app().innerHTML = themaKopf(t, "merk") + (t.merkzettel || []).map((m) => `
     <section class="merk c-${esc(m.farbe || "grau")}">
       <h3>${esc(m.titel)}</h3>
@@ -417,6 +479,11 @@ function seiteQuiz(t, qid) {
     const falsch = [...new Set(fragen.filter((_, i) => !antworten[i]).map((f) => f.thema).filter(Boolean))];
     const key = t.id + "/" + q.id, alt = S.quiz[key];
     S.quiz[key] = { beste: Math.max(richtig, (alt || {}).beste || 0), letzte: richtig, total, falsch, mal: ((alt || {}).mal || 0) + 1 };
+    const tg = tag();
+    tg.quizFragen += total;
+    tg.quizFalsch += total - richtig;
+    tg.ziele["quiz:" + q.id] = true;
+    falsch.forEach((x) => fehlerMerken({ wo: `Quiz „${q.titel}“`, thema: x }));
     merke(`${t.titel}: Quiz „${q.titel}“ ${richtig}/${total}${falsch.length ? ` (Fehler bei: ${falsch.join(", ")})` : ""}`);
     const anteil = richtig / total;
     app().innerHTML = themaKopf(t, "quiz") + `<div class="ergebnis">
@@ -451,6 +518,10 @@ function seiteKarten(t, kid) {
   };
   const ende = () => {
     S.karten[key] = { gewusst: [...ersterVersuch], total: k.karten.length, mal: ((S.karten[key] || {}).mal || 0) + 1 };
+    const tg = tag();
+    tg.karten += k.karten.length;
+    tg.kartenGewusst += ersterVersuch.size;
+    tg.ziele["karten:" + k.id] = true;
     merke(`${t.titel}: Karteikarten „${k.titel}“ – ${ersterVersuch.size}/${k.karten.length} beim ersten Mal gewusst`);
     app().innerHTML = themaKopf(t, "karten") + `<div class="ergebnis"><div class="gross">${ersterVersuch.size} / ${k.karten.length}</div>
       <p class="hand">So viele wusstest du beim ersten Mal. Alle Karten sind durch! 🎉</p>
@@ -503,6 +574,11 @@ function seiteUeben(t, uid) {
     const pruefe = (wert) => {
       st.versuche++;
       const ok = a.optionen ? (a.antworten || []).includes(wert) : (a.antworten || []).some((x) => normal(x, genau) === normal(wert, genau));
+      const tg = tag();
+      tg.versuche++;
+      tg.ziele["ueben:" + u.id] = true;
+      if (ok) tg.geloest++;
+      else { tg.fehler++; fehlerMerken({ wo: `${u.titel}, Aufgabe ${nr + 1}`, schrieb: String(wert || "").slice(0, 40), richtig: ohneZeichen((a.antworten || [])[0]) }); }
       if (!ok && wert && !(st.falsch || []).includes(wert)) st.falsch = [...(st.falsch || []), String(wert).slice(0, 40)].slice(-3);
       if (ok) {
         st.ok = true;
@@ -521,7 +597,7 @@ function seiteUeben(t, uid) {
     else { $("#ef").addEventListener("submit", (e) => { e.preventDefault(); const v = $("#ein").value; if (v.trim()) pruefe(v); }); if (!st.ok) $("#ein").focus(); }
     ($("#hoer") || KEIN).addEventListener("click", () => sprich(a.sprich, 0.8));
     ($("#tipp") || KEIN).addEventListener("click", () => { st.tipps++; speichern(); zeige(); });
-    ($("#zeig") || KEIN).addEventListener("click", () => { st.loesung = true; merke(`${t.titel}: „${u.titel}“ Aufgabe ${nr + 1} Lösung angesehen`); zeige(); });
+    ($("#zeig") || KEIN).addEventListener("click", () => { st.loesung = true; tag().loesungen++; merke(`${t.titel}: „${u.titel}“ Aufgabe ${nr + 1} Lösung angesehen`); zeige(); });
     ($("#zurueck") || KEIN).addEventListener("click", () => { nr--; zeige(); });
     $("#vor").addEventListener("click", () => { if (nr + 1 < u.aufgaben.length) { nr++; zeige(); } else fertig(); });
     $("#foto-auf").addEventListener("click", () => fotoOverlay(t, `${u.titel}, Aufgabe ${nr + 1}`, ort));
@@ -630,6 +706,9 @@ function seiteProbe(t, nrText) {
       r.fertig = Date.now();
       r.minuten = Math.max(1, Math.round(sek / 60));
       r.inZeit = sek <= dauer + 30;
+      tag().proben.push({ titel: p.titel, minuten: r.minuten, von: minuten, inZeit: r.inZeit });
+      tag().ziele.probe = true;
+      tag().ziele["probe:" + n] = true;
       merke(`${t.titel}: Probeklausur „${p.titel}“ in ${r.minuten} von ${minuten} Minuten ${r.inZeit ? "geschafft" : "(Zeit überschritten)"}`);
       speichern();
       $("#leiste").hidden = true;
@@ -722,6 +801,7 @@ function korrekturKarte(t, k, neu, mitFach, ohneUebenKnopf) {
   </section>`;
 }
 function seiteKorrektur(t) {
+  tag().ziele.korrektur = true;
   const g = gesehen(), liste = (t.korrekturen || []).slice().reverse();
   app().innerHTML = themaKopf(t, "korrektur") + liste.map((k) => korrekturKarte(t, k, !g[korrSchluessel(t, k)], false)).join("");
   liste.forEach((k) => { g[korrSchluessel(t, k)] = true; });
@@ -861,6 +941,8 @@ function seiteDiktat(t, did) {
       if (nr >= d.teile.length) {
         const r = S.diktat[key] || { mal: 0 };
         S.diktat[key] = { mal: r.mal + 1, zuletzt: Date.now() };
+        tag().diktate++;
+        tag().ziele["diktat:" + d.id] = true;
         merke(`Diktat „${d.titel}“ geschrieben`);
         speichern();
         zeige();
@@ -958,6 +1040,7 @@ function fotoOberflaeche(ziel, t, infoText, schliessen, ort) {
     knopf.disabled = true;
     if (!nr) nr = neueNr();
     const fertig = (wie) => {
+      tag().fotos += fotoListe.length;
       S.gesendet = (S.gesendet || []).concat([{ nr, t: Date.now(), was, n: fotoListe.length, tid: t ? t.id : "", ort: ort || "" }]).slice(-100);
       nr = null;
       merke(`Foto hochgeladen (${wie}): ${was}, ${fotoListe.length} ${fotoListe.length === 1 ? "Foto" : "Fotos"}`);
@@ -1152,6 +1235,7 @@ function loslegen(text) {
   window.addEventListener("hashchange", route);
   route();
   nachNeuemAchten();
+  lernzeitStarten();
 }
 // Liefert den Klartext oder wirft bei falschem Passwort. Merkt sich den Schlüssel auf diesem Gerät.
 async function mitPasswort(pw) {
