@@ -144,6 +144,15 @@ a.karte:hover,button.karte:hover{border-color:var(--royal)}
 .profi ul{margin:8px 0 0;padding-left:20px}
 [hidden]{display:none!important}
 .schloss{max-width:480px;margin-top:8vh}
+.feld{display:grid;gap:6px;margin:14px 0}
+.feld span{font-weight:700}
+.feld input{font:inherit;font-size:1.05rem;padding:10px 12px;border:2px solid var(--line);border-radius:12px;background:#fff;color:var(--ink)}
+.feld input:focus{outline:none;border-color:var(--royal);box-shadow:0 0 0 3px var(--royal-soft)}
+.fotos{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin:12px 0}
+.fotos figure{margin:0;position:relative}
+.fotos img{display:block;width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:10px;border:1.5px solid var(--line);background:var(--panel)}
+.fotos button{position:absolute;top:6px;right:6px;width:32px;height:32px;border-radius:50%;border:0;background:rgba(27,35,51,.75);color:#fff;font-weight:700}
+.unsichtbar{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none}
 .schloss h1{margin-bottom:12px}
 .schloss input{text-transform:uppercase;letter-spacing:.08em}
 .korrektur{background:var(--card);border:1.5px solid var(--line);border-left:8px solid var(--red);border-radius:6px 14px 14px 6px;padding:14px 16px;margin-bottom:12px}
@@ -262,7 +271,7 @@ function seiteStart() {
       : `<p class="leise">Noch keine Themen in der Mappe. Papa legt sie mit Claude an.</p>`}
     <div class="fuss">
       <p>Diese Lernmappe hat Papa mit Claude für dich vorbereitet. Hier ist keine KI drin. Deine Ergebnisse bleiben auf deinem Gerät, bis du sie Papa schickst.</p>
-      <p><a href="#/bericht">✉️ Fortschritt an Papa schicken</a></p>
+      <p><a href="#/foto">📷 Foto an Papa schicken</a> · <a href="#/bericht">✉️ Fortschritt an Papa schicken</a></p>
     </div>`;
   breite(app());
 }
@@ -289,7 +298,8 @@ function seitePlan(t) {
         <input type="checkbox" data-i="${i}" ${S.plan[t.id]?.[i] ? "checked" : ""}>
         <div><div class="stitel">${s.datum ? datumKurz(s.datum) + ": " : `Schritt ${i + 1}: `}${esc(s.titel)} <span class="leise klein">· ca. ${s.dauer || 20} Min.</span></div>
         <ul>${(s.aufgaben || []).map((a) => `<li>${a.ziel ? `<a href="${linkZu(t, a.ziel)}">${fmt(a.text)}</a>` : fmt(a.text)}</li>`).join("")}</ul></div>
-      </label>`).join("")}`;
+      </label>`).join("")}
+    <div class="knoepfe nicht-drucken"><a class="btn hell" href="#/foto/${t.id}">📷 Blatt oder Rechnung an Papa schicken</a></div>`;
   $$(".schritt input").forEach((cb) => cb.addEventListener("change", () => {
     S.plan[t.id] = S.plan[t.id] || {};
     S.plan[t.id][cb.dataset.i] = cb.checked;
@@ -513,14 +523,14 @@ function seiteProbe(t, nrText) {
   app().innerHTML = themaKopf(t, "probe") + `
     <div class="nicht-drucken">
       ${liste.length > 1 ? `<a class="zurueck" href="#/t/${t.id}/probe">‹ Alle Probeklausuren</a>` : ""}
-      <p>${fmt(p.hinweis || "Nimm dir ein Blatt, stell die Uhr und arbeite ohne Hilfe. Wenn du fertig bist, gib das Blatt Papa. Er macht ein Foto, und Claude korrigiert es.")}</p>
+      <p>${fmt(p.hinweis || "Nimm dir ein Blatt, stell die Uhr und arbeite ohne Hilfe. Wenn du fertig bist, fotografier das Blatt und schick es Papa. Claude korrigiert es.")}</p>
       <details class="profi"><summary>🎯 Profi-Tricks für die Klassenarbeit</summary><ul>
         <li>Lies zuerst <b>alle</b> Aufgaben kurz durch.</li>
         <li>Fang mit dem an, was du sicher kannst. Das bringt schnelle Punkte.</li>
         <li>Du hängst fest? Mach erst weiter und komm später zurück.</li>
         <li>Zur Halbzeit solltest du ungefähr in der Mitte sein.</li>
         <li>Heb dir die letzten 5 Minuten zum Kontrollieren auf.</li></ul></details>
-      <div class="knoepfe"><button class="btn" id="start">⏱️ ${minuten} Minuten starten</button><button class="btn hell" id="druck">🖨️ Drucken</button></div>
+      <div class="knoepfe"><button class="btn" id="start">⏱️ ${minuten} Minuten starten</button><button class="btn hell" id="druck">🖨️ Drucken</button><a class="btn hell" href="#/foto/${t.id}/${encodeURIComponent(p.titel)}">📷 Blatt an Papa</a></div>
       <div id="probe-ergebnis"></div>
       ${zuletzt ? `<p class="leise klein">Zuletzt: ${esc(zuletzt)}</p>` : ""}
     </div>
@@ -564,8 +574,8 @@ function seiteProbe(t, nrText) {
       $("#start").hidden = false;
       $("#start").textContent = "⏱️ Nochmal starten";
       $("#probe-ergebnis").innerHTML = r.inZeit
-        ? `<div class="erkl gut"><b>Geschafft in ${r.minuten} von ${minuten} Minuten! 🎉</b><br>Gib das Blatt Papa. Er macht ein Foto, und Claude korrigiert es.</div>`
-        : `<div class="erkl"><b>Du hast ${minutenText(r.minuten - minuten)} länger gebraucht.</b><br>Das ist beim Üben ganz normal. Gib das Blatt trotzdem Papa. Beim nächsten Mal helfen dir die Profi-Tricks.</div>`;
+        ? `<div class="erkl gut"><b>Geschafft in ${r.minuten} von ${minuten} Minuten! 🎉</b><br>Jetzt fotografier dein Blatt und schick es Papa. Claude korrigiert es.</div><div class="knoepfe"><a class="btn" href="#/foto/${t.id}/${encodeURIComponent(p.titel)}">📷 Blatt fotografieren</a></div>`
+        : `<div class="erkl"><b>Du hast ${minutenText(r.minuten - minuten)} länger gebraucht.</b><br>Das ist beim Üben ganz normal. Schick das Blatt trotzdem Papa. Beim nächsten Mal helfen dir die Profi-Tricks.</div><div class="knoepfe"><a class="btn" href="#/foto/${t.id}/${encodeURIComponent(p.titel)}">📷 Blatt fotografieren</a></div>`;
       toast("Gut gemacht! ✏️");
       window.scrollTo(0, 0);
     };
@@ -588,6 +598,109 @@ function seiteProbe(t, nrText) {
 function seiteKorrektur(t) {
   app().innerHTML = themaKopf(t, "korrektur") + (t.korrekturen || []).map((k) => `
     <section class="korrektur"><h3>${esc(k.titel)}</h3><p class="leise">${k.datum ? datumLang(k.datum) : ""}${k.punkte ? ` · <b>${esc(k.punkte)}</b>` : ""}</p><p>${fmt(k.text)}</p></section>`).join("");
+}
+
+// ---------- Foto an Papa ----------
+// Mit Upload-Adresse (KIND.upload, steht in den verschlüsselten Inhalten) gehen die Fotos direkt in Papas Google Drive.
+// Ohne Upload-Adresse oder wenn das Hochladen scheitert: Teilen-Menü (Nachrichten, Mail, AirDrop).
+let fotoListe = [];
+async function verkleinern(datei, max = 2000, qualitaet = 0.85) {
+  const url = URL.createObjectURL(datei);
+  try {
+    const img = await new Promise((ok, fehler) => { const i = new Image(); i.onload = () => ok(i); i.onerror = fehler; i.src = url; });
+    const f = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement("canvas");
+    c.width = Math.round(img.naturalWidth * f); c.height = Math.round(img.naturalHeight * f);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    return (await new Promise((ok) => c.toBlob(ok, "image/jpeg", qualitaet))) || datei;
+  } catch (_) { return datei; }
+  finally { URL.revokeObjectURL(url); }
+}
+const blobZuB64 = (blob) => new Promise((ok, fehler) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.onerror = fehler; r.readAsDataURL(blob); });
+function fotoName(was, i) {
+  const d = new Date(), zeit = `${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}`;
+  return `${heuteISO()}_${zeit}_${(was || "Foto").replace(/[^\wäöüÄÖÜß-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60)}_${i + 1}.jpg`;
+}
+async function fotoHochladen(blob, name, was) {
+  const antwort = await fetch(KIND.upload.url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ token: KIND.upload.token, name, beschreibung: was, bild: await blobZuB64(blob) }) });
+  const j = await antwort.json();
+  if (!j.ok) throw new Error(j.fehler || "Hochladen hat nicht geklappt");
+}
+async function fotoTeilen(was) {
+  const files = fotoListe.map((f, i) => new File([f.blob], fotoName(was, i), { type: "image/jpeg" }));
+  if (!(navigator.canShare && navigator.canShare({ files }))) return "geht-nicht";
+  try { await navigator.share({ files, title: "Foto für Papa", text: was }); return "ok"; }
+  catch (e) { return e && e.name === "AbortError" ? "abgebrochen" : "geht-nicht"; }
+}
+function seiteFoto(tid, info) {
+  const t = tid ? thema(tid) : null;
+  let infoText = "";
+  try { infoText = info ? decodeURIComponent(info) : ""; } catch (_) {}
+  const vorschlag = [t ? `${t.fach}: ${t.titel}` : "", infoText].filter(Boolean).join(" – ");
+  const direkt = !!(KIND.upload && KIND.upload.url);
+  fotoListe.forEach((f) => URL.revokeObjectURL(f.url));
+  fotoListe = [];
+  app().innerHTML = `<a class="zurueck" href="${t ? `#/t/${t.id}/plan` : "#/"}">‹ Zurück</a>
+    <h1>📷 Foto an Papa</h1>
+    <p>Fotografier dein Blatt oder deine Rechnung. ${direkt ? "Die Fotos gehen direkt an Papa." : "Danach schickst du sie Papa, zum Beispiel über Nachrichten."}</p>
+    <label class="feld"><span>Was ist auf dem Foto?</span><input id="foto-was" value="${esc(vorschlag)}" placeholder="z. B. Mathe-Hausaufgabe S. 34"></label>
+    <div class="fotos" id="fotos"></div>
+    <input type="file" id="foto-input" accept="image/*" capture="environment" class="unsichtbar" tabindex="-1" aria-hidden="true">
+    <div class="knoepfe"><button class="btn" id="foto-knopf">📷 Foto aufnehmen</button><button class="btn gut" id="foto-senden" disabled>✉️ An Papa schicken</button></div>
+    <div id="foto-meldung"></div>
+    <p class="leise klein">Tipp: Leg das Blatt flach auf den Tisch, halt das iPad gerade darüber und achte auf gutes Licht. Jede Seite ein eigenes Foto.</p>`;
+  const zeigeFotos = () => {
+    $("#fotos").innerHTML = fotoListe.map((f, i) => `<figure><img src="${f.url}" alt="Foto ${i + 1}"><button data-weg="${i}" aria-label="Foto ${i + 1} löschen">✕</button></figure>`).join("");
+    $$("#fotos [data-weg]").forEach((b) => b.addEventListener("click", () => { const [f] = fotoListe.splice(+b.dataset.weg, 1); URL.revokeObjectURL(f.url); zeigeFotos(); }));
+    $("#foto-knopf").textContent = fotoListe.length ? "📷 Noch ein Foto" : "📷 Foto aufnehmen";
+    $("#foto-senden").disabled = !fotoListe.length;
+    $("#foto-senden").textContent = fotoListe.length > 1 ? `✉️ ${fotoListe.length} Fotos an Papa schicken` : "✉️ An Papa schicken";
+  };
+  const meldung = (html) => { $("#foto-meldung").innerHTML = html; };
+  $("#foto-knopf").addEventListener("click", () => $("#foto-input").click());
+  $("#foto-input").addEventListener("change", async (e) => {
+    const dateien = [...(e.target.files || [])];
+    e.target.value = "";
+    if (!dateien.length) return;
+    meldung(`<p class="leise">Foto wird vorbereitet …</p>`);
+    for (const d of dateien) { const blob = await verkleinern(d); fotoListe.push({ blob, url: URL.createObjectURL(blob) }); }
+    meldung("");
+    zeigeFotos();
+  });
+  $("#foto-senden").addEventListener("click", async () => {
+    const was = $("#foto-was").value.trim() || "Foto";
+    const knopf = $("#foto-senden");
+    knopf.disabled = true;
+    const fertig = (wie) => {
+      merke(`Foto an Papa geschickt (${wie}): ${was}, ${fotoListe.length} ${fotoListe.length === 1 ? "Foto" : "Fotos"}`);
+      fotoListe.forEach((f) => URL.revokeObjectURL(f.url));
+      fotoListe = [];
+      zeigeFotos();
+      meldung(`<div class="erkl gut"><b>Papa hat deine Fotos bekommen! ✅</b><br>Claude schaut sie sich an. Super gemacht!</div>`);
+      toast("Verschickt! 📨");
+    };
+    if (direkt) {
+      try {
+        for (let i = 0; i < fotoListe.length; i++) {
+          meldung(`<p class="leise">Foto ${i + 1} von ${fotoListe.length} wird hochgeladen …</p>`);
+          await fotoHochladen(fotoListe[i].blob, fotoName(was, i), was);
+        }
+        return fertig("direkt");
+      } catch (_) {
+        meldung(`<p class="rueckmeldung schlecht">Das Hochladen hat nicht geklappt. Ist das Internet an? Du kannst die Fotos auch über Nachrichten schicken.</p>
+          <div class="knoepfe"><button class="btn" id="foto-nochmal">↺ Nochmal versuchen</button><button class="btn hell" id="foto-teilen">📨 Über Nachrichten schicken</button></div>`);
+        $("#foto-nochmal").addEventListener("click", () => knopf.click());
+        $("#foto-teilen").addEventListener("click", async () => { if ((await fotoTeilen(was)) === "ok") fertig("Teilen"); });
+        knopf.disabled = false;
+        return;
+      }
+    }
+    const ergebnis = await fotoTeilen(was);
+    if (ergebnis === "ok") return fertig("Teilen");
+    knopf.disabled = false;
+    if (ergebnis === "geht-nicht") meldung(`<p class="rueckmeldung schlecht">Dieses Gerät kann die Fotos hier nicht verschicken. Zeig Papa einfach dein Blatt.</p>`);
+  });
 }
 
 // ---------- Bericht für Papa ----------
@@ -648,6 +761,7 @@ function route() {
   const p = location.hash.replace(/^#\/?/, "").split("?")[0].split("/").filter(Boolean);
   window.scrollTo(0, 0);
   if (p[0] === "bericht") return seiteBericht();
+  if (p[0] === "foto") return seiteFoto(p[1], p[2]);
   if (p[0] === "t") {
     const t = thema(p[1]);
     if (!t) return seiteStart();
