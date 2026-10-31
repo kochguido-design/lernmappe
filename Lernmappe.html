@@ -918,6 +918,15 @@ function loslegen(text) {
   new Function(text)();   // legt LM_KIND fest und meldet die Themen mit LM.thema(...) an
   KIND = window.LM_KIND || KIND;
   ladeFortschritt();
+  // Neustart aus der Ferne: Ist LM_KIND.neustart höher als auf diesem Gerät gespeichert, beginnt der Fortschritt von vorn.
+  const neustart = Number(KIND.neustart || 0);
+  if ((S.neustart || 0) < neustart) {
+    const opt = S.diktatOpt;
+    S = { plan: {}, quiz: {}, karten: {}, uebung: {}, probe: {}, diktat: {}, log: [] };
+    if (opt) S.diktatOpt = opt;
+  }
+  S.neustart = neustart;
+  speichern();
   window.addEventListener("hashchange", route);
   route();
 }
