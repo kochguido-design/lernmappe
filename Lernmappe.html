@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Meine Lernmappe</title>
 <style>
-/* Heft-Stil wie auf Valentinas Arbeitsblättern: Papier, roter Rand, Füllerblau, Textmarker. */
+/* Heft-Stil wie auf den Arbeitsblättern: Papier, roter Rand, Füllerblau, Textmarker. */
 :root{
   --paper:#fbfcfe; --ink:#1b2333; --ink-soft:#4b566c; --royal:#2343a6; --royal-soft:#e4e9f8;
   --margin:#e58a8c; --red:#c4302a; --red-soft:#fbe4e2; --green:#1f7a45; --green-soft:#dcf3e3;
@@ -143,6 +143,9 @@ a.karte:hover,button.karte:hover{border-color:var(--royal)}
 .profi summary{cursor:pointer;font-weight:700}
 .profi ul{margin:8px 0 0;padding-left:20px}
 [hidden]{display:none!important}
+.schloss{max-width:480px;margin-top:8vh}
+.schloss h1{margin-bottom:12px}
+.schloss input{text-transform:uppercase;letter-spacing:.08em}
 .korrektur{background:var(--card);border:1.5px solid var(--line);border-left:8px solid var(--red);border-radius:6px 14px 14px 6px;padding:14px 16px;margin-bottom:12px}
 
 /* Bericht */
@@ -170,18 +173,28 @@ textarea.bericht{width:100%;min-height:300px;font:inherit;font-size:.95rem;paddi
 // Inhalte melden sich hier an (siehe Ordner "inhalt").
 window.LM = { themen: [], thema(t) { this.themen.push(t); } };
 </script>
-<script src="inhalt/index.js"></script>
+<script src="daten/paket.js"></script>
 <script>
 "use strict";
-const KIND = (window.LM_KIND || { name: "Valentina", klasse: "5" });
-const SPEICHER = "lernmappe-" + KIND.name.toLowerCase();
+// Name und Klasse stehen in den verschlüsselten Inhalten und werden nach dem Entsperren gesetzt.
+let KIND = { name: "", klasse: "" };
+const SPEICHER = "lernmappe-fortschritt";
+const SCHLUESSEL = "lernmappe-schluessel";
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const app = () => $("#app");
 
 // ---------- Fortschritt (bleibt in diesem Browser gespeichert) ----------
 let S = { plan: {}, quiz: {}, karten: {}, uebung: {}, probe: {}, log: [] };
-try { const roh = localStorage.getItem(SPEICHER); if (roh) S = Object.assign(S, JSON.parse(roh)); } catch (_) {}
+function ladeFortschritt() {
+  try {
+    let roh = localStorage.getItem(SPEICHER);
+    // Früher hieß der Speicher "lernmappe-<name>". Alten Fortschritt einmalig übernehmen.
+    const alt = KIND.name ? "lernmappe-" + KIND.name.toLowerCase() : "";
+    if (!roh && alt && localStorage.getItem(alt)) { roh = localStorage.getItem(alt); localStorage.setItem(SPEICHER, roh); localStorage.removeItem(alt); }
+    if (roh) S = Object.assign(S, JSON.parse(roh));
+  } catch (_) {}
+}
 function speichern() { try { localStorage.setItem(SPEICHER, JSON.stringify(S)); } catch (_) {} }
 function merke(text) { S.log.push({ t: Date.now(), text }); if (S.log.length > 300) S.log = S.log.slice(-300); speichern(); }
 
@@ -650,19 +663,77 @@ function route() {
   seiteStart();
 }
 
-// Inhaltsdateien nacheinander laden, dann starten.
-(function laden() {
-  const dateien = (window.LM_DATEIEN || []).slice();
-  const naechste = () => {
-    const f = dateien.shift();
-    if (!f) { window.addEventListener("hashchange", route); return route(); }
-    const s = document.createElement("script");
-    s.src = "inhalt/" + f;
-    s.onload = naechste;
-    s.onerror = () => { console.warn("Konnte nicht laden:", f); naechste(); };
-    document.body.appendChild(s);
-  };
-  naechste();
+// ---------- Entsperren: Inhalte liegen verschlüsselt in daten/paket.js ----------
+const b64zuBytes = (t) => Uint8Array.from(atob(t), (c) => c.charCodeAt(0));
+const bytesZuB64 = (b) => btoa(String.fromCharCode(...b));
+const normPw = (t) => String(t).toUpperCase().replace(/[^A-Z0-9]/g, "");
+async function schluesselAusPasswort(pw) {
+  const P = window.LM_PAKET, enc = new TextEncoder();
+  const basis = await crypto.subtle.importKey("raw", enc.encode(normPw(pw)), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: enc.encode(P.salz), iterations: P.runden }, basis, 256);
+  return new Uint8Array(bits);
+}
+async function entschluesseln(roh) {
+  const P = window.LM_PAKET;
+  const key = await crypto.subtle.importKey("raw", roh, "AES-GCM", false, ["decrypt"]);
+  const klar = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64zuBytes(P.iv), additionalData: new TextEncoder().encode("lernmappe-v1") }, key, b64zuBytes(P.daten));
+  return new TextDecoder().decode(klar);
+}
+function loslegen(text) {
+  new Function(text)();   // legt LM_KIND fest und meldet die Themen mit LM.thema(...) an
+  KIND = window.LM_KIND || KIND;
+  ladeFortschritt();
+  window.addEventListener("hashchange", route);
+  route();
+}
+// Liefert den Klartext oder wirft bei falschem Passwort. Merkt sich den Schlüssel auf diesem Gerät.
+async function mitPasswort(pw) {
+  const roh = await schluesselAusPasswort(pw);
+  const text = await entschluesseln(roh);
+  try { localStorage.setItem(SCHLUESSEL, bytesZuB64(roh)); } catch (_) {}
+  return text;
+}
+function seiteSchloss(meldung) {
+  app().innerHTML = `<div class="schloss">
+      <p class="hand">Hallo!</p><h1>Meine Lernmappe</h1>
+      <p>Gib dein Lernmappen-Passwort ein. Das musst du nur einmal machen.</p>
+      <form class="eingabe-zeile" id="pw-form"><input id="pw" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX" aria-label="Passwort"><button class="btn">🔓 Öffnen</button></form>
+      <div id="pw-meldung">${meldung ? `<p class="rueckmeldung schlecht">${esc(meldung)}</p>` : ""}</div>
+      <p class="leise klein">Du hast das Passwort nicht? Frag Papa.</p></div>`;
+  $("#pw").focus();
+  $("#pw-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const pw = $("#pw").value;
+    if (normPw(pw).length < 16) return ($("#pw-meldung").innerHTML = `<p class="rueckmeldung schlecht">Das Passwort hat 16 Zeichen. Schau nochmal genau.</p>`);
+    $("#pw-meldung").innerHTML = `<p class="leise">Einen Moment …</p>`;
+    let text = null;
+    try { text = await mitPasswort(pw); }
+    catch (_) { return ($("#pw-meldung").innerHTML = `<p class="rueckmeldung schlecht">Das Passwort stimmt nicht. Probier es nochmal oder frag Papa.</p>`); }
+    loslegen(text);
+  });
+}
+(async function start() {
+  if (!window.LM_PAKET || !window.crypto || !crypto.subtle) {
+    app().innerHTML = `<p class="rueckmeldung schlecht">Die Lernmappe konnte nicht geladen werden. Bitte lade die Seite neu.</p>`;
+    return;
+  }
+  // Geheimer Link: …/Lernmappe.html#k=PASSWORT. Danach den Link sofort aus der Adresszeile entfernen.
+  const m = location.hash.match(/^#k=([A-Za-z0-9-]+)/);
+  if (m) {
+    history.replaceState(null, "", location.pathname + location.search + "#/");
+    let text = null;
+    try { text = await mitPasswort(m[1]); } catch (_) { return seiteSchloss("Der Link hat nicht funktioniert. Gib das Passwort ein."); }
+    return loslegen(text);
+  }
+  let gespeichert = null;
+  try { gespeichert = localStorage.getItem(SCHLUESSEL); } catch (_) {}
+  if (gespeichert) {
+    let text = null;
+    try { text = await entschluesseln(b64zuBytes(gespeichert)); }
+    catch (_) { try { localStorage.removeItem(SCHLUESSEL); } catch (_) {} }   // z. B. neues Passwort
+    if (text !== null) return loslegen(text);
+  }
+  seiteSchloss();
 })();
 </script>
 </body>
