@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lernmappe – Gerätetest</title>
+<style>
+body{margin:0;padding:24px 16px;background:#fbfcfe;color:#1b2333;font-family:-apple-system,system-ui,sans-serif;font-size:18px;line-height:1.5}
+h1{color:#2343a6;font-size:26px;margin:0 0 12px}
+td{padding:6px 10px;border-bottom:1px solid #d3dbe8;vertical-align:top}
+.ok{color:#1f7a45;font-weight:bold}.nein{color:#c4302a;font-weight:bold}
+.klein{font-size:13px;color:#4b566c;word-break:break-all}
+</style>
+</head>
+<body>
+<h1>✅ Die Seite ist angekommen</h1>
+<p>Die Verbindung zur Lernmappe funktioniert. Bitte mach ein Bildschirmfoto von dieser Seite und schick es Papa.</p>
+<table id="t"><tr><td>Prüfung läuft …</td></tr></table>
+<p class="klein" id="ua"></p>
+<script>
+/* Absichtlich in alter JavaScript-Schreibweise, damit der Test auch auf sehr alten iPads läuft. */
+(function () {
+  function kann(code) { try { new Function(code); return true; } catch (e) { return false; } }
+  function speicher() { try { localStorage.setItem("lm-test", "1"); localStorage.removeItem("lm-test"); return true; } catch (e) { return false; } }
+  var zeilen = [
+    ["JavaScript", true],
+    ["Moderne Funktionen (async)", kann("async function f() { await 1; }")],
+    ["Objekte kopieren ({...})", kann("var a = {...{x: 1}};")],
+    ["Verschlüsselung (WebCrypto)", !!(window.crypto && window.crypto.subtle)],
+    ["Speicher (localStorage)", speicher()],
+    ["Vorlesen (Sprachausgabe)", "speechSynthesis" in window],
+    ["Teilen-Menü", !!navigator.share]
+  ];
+  var html = "";
+  for (var i = 0; i < zeilen.length; i++) {
+    html += "<tr><td>" + zeilen[i][0] + "</td><td class='" + (zeilen[i][1] ? "ok'>ja" : "nein'>nein") + "</td></tr>";
+  }
+  document.getElementById("t").innerHTML = html;
+  document.getElementById("ua").textContent = "Gerät: " + navigator.userAgent;
+})();
+</script>
+<noscript><p class="nein">JavaScript ist ausgeschaltet. Die Lernmappe braucht JavaScript.</p></noscript>
+</body>
+</html>
