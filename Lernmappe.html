@@ -319,7 +319,7 @@ function seiteStart() {
         ${f.gesamt ? `<div class="balken"><span data-w="${f.prozent}"></span></div><small class="leise">${f.fertig} von ${f.gesamt} Schritten geschafft</small>` : ""}
       </a>`; }).join("")}</div>`
       : `<p class="leise">Noch keine Themen in der Mappe. Papa legt sie mit Claude an.</p>`}
-    <div class="knoepfe" style="margin-top:28px"><a class="btn" href="#/foto">📷 Foto an Papa schicken</a><a class="btn gut" href="#/ergebnisse">📬 Meine Ergebnisse</a><a class="btn hell" href="#/bericht">✉️ Fortschritt an Papa schicken</a></div>
+    <div class="knoepfe" style="margin-top:28px"><a class="btn" href="#/foto">📷 Foto hochladen</a><a class="btn gut" href="#/ergebnisse">📬 Meine Ergebnisse</a><a class="btn hell" href="#/bericht">✉️ Fortschritt an Papa schicken</a></div>
     <div class="fuss">
       <p>Diese Lernmappe hat Papa mit Claude für dich vorbereitet. Hier ist keine KI drin. Deine Ergebnisse bleiben auf deinem Gerät, bis du sie Papa schickst.</p>
     </div>`;
@@ -349,7 +349,7 @@ function seitePlan(t) {
         <div><div class="stitel">${s.datum ? datumKurz(s.datum) + ": " : `Schritt ${i + 1}: `}${esc(s.titel)} <span class="leise klein">· ca. ${s.dauer || 20} Min.</span></div>
         <ul>${(s.aufgaben || []).map((a) => `<li>${a.ziel ? `<a href="${linkZu(t, a.ziel)}">${fmt(a.text)}</a>` : fmt(a.text)}</li>`).join("")}</ul></div>
       </label>`).join("")}
-    <div class="knoepfe nicht-drucken"><a class="btn hell" href="#/foto/${t.id}">📷 Blatt oder Rechnung an Papa schicken</a></div>`;
+    <div class="knoepfe nicht-drucken"><a class="btn hell" href="#/foto/${t.id}">📷 Blatt oder Rechnung hochladen</a></div>`;
   $$(".schritt input").forEach((cb) => cb.addEventListener("change", () => {
     S.plan[t.id] = S.plan[t.id] || {};
     S.plan[t.id][cb.dataset.i] = cb.checked;
@@ -584,14 +584,14 @@ function seiteProbe(t, nrText) {
   app().innerHTML = themaKopf(t, "probe") + `
     <div class="nicht-drucken">
       ${liste.length > 1 ? `<a class="zurueck" href="#/t/${t.id}/probe">‹ Alle Probeklausuren</a>` : ""}
-      <p>${fmt(p.hinweis || "Nimm dir ein Blatt, stell die Uhr und arbeite ohne Hilfe. Wenn du fertig bist, fotografier das Blatt und schick es Papa. Claude korrigiert es.")}</p>
+      <p>${fmt(p.hinweis || "Nimm dir ein Blatt, stell die Uhr und arbeite ohne Hilfe. Wenn du fertig bist, fotografier das Blatt und lade es hoch. Claude korrigiert es.")}</p>
       <details class="profi"><summary>🎯 Profi-Tricks für die Klassenarbeit</summary><ul>
         <li>Lies zuerst <b>alle</b> Aufgaben kurz durch.</li>
         <li>Fang mit dem an, was du sicher kannst. Das bringt schnelle Punkte.</li>
         <li>Du hängst fest? Mach erst weiter und komm später zurück.</li>
         <li>Zur Halbzeit solltest du ungefähr in der Mitte sein.</li>
         <li>Heb dir die letzten 5 Minuten zum Kontrollieren auf.</li></ul></details>
-      <div class="knoepfe"><button class="btn" id="start">⏱️ ${minuten} Minuten starten</button><button class="btn hell" id="druck">🖨️ Drucken</button><a class="btn hell" href="#/foto/${t.id}/${encodeURIComponent(p.titel)}/probe:${n}">📷 Blatt an Papa</a></div>
+      <div class="knoepfe"><button class="btn" id="start">⏱️ ${minuten} Minuten starten</button><button class="btn hell" id="druck">🖨️ Drucken</button><a class="btn hell" href="#/foto/${t.id}/${encodeURIComponent(p.titel)}/probe:${n}">📷 Blatt hochladen</a></div>
       <div id="probe-ergebnis"></div>
       ${ergebnisBlock(t, `probe:${n}`, "Korrektur deiner Probeklausur")}
       ${zuletzt ? `<p class="leise klein">Zuletzt: ${esc(zuletzt)}</p>` : ""}
@@ -636,8 +636,8 @@ function seiteProbe(t, nrText) {
       $("#start").hidden = false;
       $("#start").textContent = "⏱️ Nochmal starten";
       $("#probe-ergebnis").innerHTML = r.inZeit
-        ? `<div class="erkl gut"><b>Geschafft in ${r.minuten} von ${minuten} Minuten! 🎉</b><br>Jetzt fotografier dein Blatt und schick es Papa. Claude korrigiert es.</div><div class="knoepfe"><a class="btn" href="#/foto/${t.id}/${encodeURIComponent(p.titel)}/probe:${n}">📷 Blatt fotografieren</a></div>`
-        : `<div class="erkl"><b>Du hast ${minutenText(r.minuten - minuten)} länger gebraucht.</b><br>Das ist beim Üben ganz normal. Schick das Blatt trotzdem Papa. Beim nächsten Mal helfen dir die Profi-Tricks.</div><div class="knoepfe"><a class="btn" href="#/foto/${t.id}/${encodeURIComponent(p.titel)}/probe:${n}">📷 Blatt fotografieren</a></div>`;
+        ? `<div class="erkl gut"><b>Geschafft in ${r.minuten} von ${minuten} Minuten! 🎉</b><br>Jetzt fotografier dein Blatt und lade es hoch. Claude korrigiert es.</div><div class="knoepfe"><a class="btn" href="#/foto/${t.id}/${encodeURIComponent(p.titel)}/probe:${n}">📷 Blatt fotografieren</a></div>`
+        : `<div class="erkl"><b>Du hast ${minutenText(r.minuten - minuten)} länger gebraucht.</b><br>Das ist beim Üben ganz normal. Lade das Blatt trotzdem hoch. Beim nächsten Mal helfen dir die Profi-Tricks.</div><div class="knoepfe"><a class="btn" href="#/foto/${t.id}/${encodeURIComponent(p.titel)}/probe:${n}">📷 Blatt fotografieren</a></div>`;
       toast("Gut gemacht! ✏️");
       window.scrollTo(0, 0);
     };
@@ -736,7 +736,7 @@ function seiteErgebnisse() {
     ${warten.length ? `<h2>Wird noch korrigiert ⏳</h2>${warten.map(warteKarte).join("")}` : ""}
     <h2>Korrigiert</h2>
     ${alle.length ? alle.map((x) => korrekturKarte(x.t, x.k, !g[x.key], true)).join("")
-      : `<p class="leise">Noch keine Korrekturen. Schick Papa ein Foto von deinem Blatt, dann steht hier bald, was richtig war.</p>`}`;
+      : `<p class="leise">Noch keine Korrekturen. Lade ein Foto von deinem Blatt hoch, dann steht hier bald, was richtig war.</p>`}`;
   alle.forEach((x) => { g[x.key] = true; });
   speichern();
   neuBanner(false);
@@ -876,7 +876,7 @@ function seiteDiktat(t, did) {
   zeige();
 }
 
-// ---------- Foto an Papa ----------
+// ---------- Foto hochladen ----------
 // Mit Upload-Adresse (KIND.upload, steht in den verschlüsselten Inhalten) gehen die Fotos direkt in Papas Google Drive.
 // Ohne Upload-Adresse oder wenn das Hochladen scheitert: Teilen-Menü (Nachrichten, Mail, AirDrop).
 let fotoListe = [];
@@ -926,12 +926,12 @@ function fotoOberflaeche(ziel, t, infoText, schliessen, ort) {
   let nr = null;   // Kennung der Sendung, gilt auch für „Nochmal versuchen“
   ziel.innerHTML = `
     ${schliessen ? `<div class="knoepfe" style="justify-content:flex-end;margin:0"><button class="btn hell" id="foto-zu">✕ Schließen</button></div>` : ""}
-    <h1>📷 Foto an Papa</h1>
-    <p>Fotografier dein Blatt oder deine Rechnung. ${direkt ? "Die Fotos gehen direkt an Papa." : "Danach schickst du sie Papa, zum Beispiel über Nachrichten."}</p>
+    <h1>📷 Foto hochladen</h1>
+    <p>Fotografier dein Blatt oder deine Rechnung. ${direkt ? "Danach tippst du auf Hochladen." : "Danach lädst du sie über das Teilen-Menü hoch, zum Beispiel über Nachrichten."}</p>
     <label class="feld"><span>Was ist auf dem Foto?</span><input id="foto-was" value="${esc(vorschlag)}" placeholder="z. B. Mathe-Hausaufgabe S. 34"></label>
     <div class="fotos" id="fotos"></div>
     <input type="file" id="foto-input" accept="image/*" capture="environment" class="unsichtbar" tabindex="-1" aria-hidden="true">
-    <div class="knoepfe"><button class="btn" id="foto-knopf">📷 Foto aufnehmen</button><button class="btn gut" id="foto-senden" disabled>✉️ An Papa schicken</button></div>
+    <div class="knoepfe"><button class="btn" id="foto-knopf">📷 Foto aufnehmen</button><button class="btn gut" id="foto-senden" disabled>⬆️ Hochladen</button></div>
     <div id="foto-meldung"></div>
     <p class="leise klein">Tipp: Leg das Blatt flach auf den Tisch, halt das iPad gerade darüber und achte auf gutes Licht. Jede Seite ein eigenes Foto.</p>`;
   const zeigeFotos = () => {
@@ -939,7 +939,7 @@ function fotoOberflaeche(ziel, t, infoText, schliessen, ort) {
     $$("#fotos [data-weg]").forEach((b) => b.addEventListener("click", () => { const [f] = fotoListe.splice(+b.dataset.weg, 1); URL.revokeObjectURL(f.url); zeigeFotos(); }));
     $("#foto-knopf").textContent = fotoListe.length ? "📷 Noch ein Foto" : "📷 Foto aufnehmen";
     $("#foto-senden").disabled = !fotoListe.length;
-    $("#foto-senden").textContent = fotoListe.length > 1 ? `✉️ ${fotoListe.length} Fotos an Papa schicken` : "✉️ An Papa schicken";
+    $("#foto-senden").textContent = fotoListe.length > 1 ? `⬆️ ${fotoListe.length} Fotos hochladen` : "⬆️ Hochladen";
   };
   const meldung = (html) => { $("#foto-meldung").innerHTML = html; };
   $("#foto-knopf").addEventListener("click", () => $("#foto-input").click());
@@ -960,14 +960,14 @@ function fotoOberflaeche(ziel, t, infoText, schliessen, ort) {
     const fertig = (wie) => {
       S.gesendet = (S.gesendet || []).concat([{ nr, t: Date.now(), was, n: fotoListe.length, tid: t ? t.id : "", ort: ort || "" }]).slice(-100);
       nr = null;
-      merke(`Foto an Papa geschickt (${wie}): ${was}, ${fotoListe.length} ${fotoListe.length === 1 ? "Foto" : "Fotos"}`);
+      merke(`Foto hochgeladen (${wie}): ${was}, ${fotoListe.length} ${fotoListe.length === 1 ? "Foto" : "Fotos"}`);
       fotoListe.forEach((f) => URL.revokeObjectURL(f.url));
       fotoListe = [];
       zeigeFotos();
-      meldung(`<div class="erkl gut"><b>Papa hat deine Fotos bekommen! ✅</b><br>Claude schaut sie sich an. Super gemacht! Was richtig war, siehst du bald unter <b>📬 Meine Ergebnisse</b>.</div>
+      meldung(`<div class="erkl gut"><b>Hochgeladen! ✅</b><br>Claude schaut sie sich an. Super gemacht! Was richtig war, siehst du bald unter <b>📬 Meine Ergebnisse</b>.</div>
         <div class="knoepfe">${schliessen ? `<button class="btn" id="foto-weiter">✓ Weiter</button>` : ""}<a class="btn hell" href="#/ergebnisse">📬 Meine Ergebnisse</a></div>`);
       ($("#foto-weiter") || KEIN).addEventListener("click", schliessen);
-      toast("Verschickt! 📨");
+      toast("Hochgeladen! ⬆️");
     };
     if (direkt) {
       try {
