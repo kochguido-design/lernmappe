@@ -201,6 +201,16 @@ textarea.bericht{width:100%;min-height:300px;font:inherit;font-size:.95rem;paddi
 .am-ort>h3{margin-bottom:10px;color:var(--royal)}
 .ort-hinweis{display:inline-block;margin:0 8px 8px 0;background:var(--green-soft);border:2px solid var(--green);border-radius:12px;padding:6px 12px;font-weight:700}
 .neu-banner{position:fixed;right:16px;bottom:16px;z-index:15;background:var(--royal);color:#fff;border:0;border-radius:14px;padding:14px 18px;font-weight:700;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.feld textarea{font:inherit;font-size:1.05rem;padding:10px 12px;border:2px solid var(--line);border-radius:12px;background:#fff;color:var(--ink);min-height:110px;resize:vertical}
+.feld textarea:focus{outline:none;border-color:var(--royal);box-shadow:0 0 0 3px var(--royal-soft)}
+/* Nachrichten mit Papa */
+.brief-knopf{background:var(--royal-soft);border-color:var(--royal)}
+.briefe{display:grid;gap:10px;margin:14px 0 22px}
+.brief{max-width:85%;background:var(--card);border:1.5px solid var(--line);border-radius:16px 16px 16px 4px;padding:10px 14px}
+.brief.mir{justify-self:end;background:var(--green-soft);border-color:var(--green);border-radius:16px 16px 4px 16px}
+.brief small{display:block;color:var(--ink-soft);font-weight:700;margin-bottom:2px}
+.brief img{display:block;max-width:220px;border-radius:10px;margin-top:8px}
+.hilfe-zeile{margin-top:36px;text-align:center;font-size:.95rem}
 .fuss{margin-top:40px;padding-top:12px;border-top:2px dashed var(--line);font-size:.88rem;color:var(--ink-soft)}
 
 @media print{
@@ -275,7 +285,7 @@ function tag() {
   const d = heuteISO();
   S.tage = S.tage || {};
   if (!S.tage[d]) {
-    S.tage[d] = { sekunden: 0, geloest: 0, versuche: 0, fehler: 0, loesungen: 0, quizFragen: 0, quizFalsch: 0, karten: 0, kartenGewusst: 0, diktate: 0, proben: [], fotos: 0, ziele: {}, schritte: [], fehlerListe: [] };
+    S.tage[d] = { sekunden: 0, geloest: 0, versuche: 0, fehler: 0, loesungen: 0, quizFragen: 0, quizFalsch: 0, karten: 0, kartenGewusst: 0, diktate: 0, proben: [], fotos: 0, buchseiten: 0, ziele: {}, schritte: [], fehlerListe: [] };
     Object.keys(S.tage).sort().slice(0, -21).forEach((k) => { delete S.tage[k]; });   // nur die letzten 3 Wochen behalten
   }
   return S.tage[d];
@@ -384,6 +394,7 @@ function seiteStart() {
     </div>
     ${n ? `<a class="weiter" href="#/t/${n.t.id}/plan"><div><small>${esc(n.t.fach)} · Als Nächstes</small><b>${esc(n.s.titel)}</b></div><span class="pfeil">›</span></a>`
         : LM.themen.length ? `<p class="hand">Alles erledigt, was heute dran ist. Super! 🎉</p>` : ""}
+    ${briefKnopf()}
     ${ergebnisKnopf()}
     <h2>Meine Themen</h2>
     ${themen.length ? `<div class="raster">${themen.map((t) => {
@@ -395,7 +406,8 @@ function seiteStart() {
         ${f.gesamt ? `<div class="balken"><span data-w="${f.prozent}"></span></div><small class="leise">${f.fertig} von ${f.gesamt} Schritten geschafft</small>` : ""}
       </a>`; }).join("")}</div>`
       : `<p class="leise">Noch keine Themen in der Mappe. Papa legt sie mit Claude an.</p>`}
-    <div class="knoepfe" style="margin-top:28px"><a class="btn" href="#/foto">📷 Foto hochladen</a><a class="btn gut" href="#/ergebnisse">📬 Meine Ergebnisse</a><a class="btn hell" href="#/bericht">✉️ Fortschritt an Papa schicken</a></div>
+    <div class="knoepfe" style="margin-top:28px"><a class="btn" href="#/foto">📷 Meine Lösung hochladen</a><a class="btn" href="#/buch">📚 Buchseiten schicken</a><a class="btn gut" href="#/ergebnisse">📬 Meine Ergebnisse</a></div>
+    <div class="knoepfe"><a class="btn hell" href="#/nachrichten">💬 Papa schreiben${neueBriefe() ? ` <span class="neu-zahl">${neueBriefe()} neu</span>` : ""}</a><a class="btn hell" href="#/bericht">✉️ Fortschritt an Papa schicken</a></div>
     <div class="fuss">
       <p>Diese Lernmappe hat Papa mit Claude für dich vorbereitet. Hier ist keine KI drin. Deine Ergebnisse bleiben auf deinem Gerät, bis du sie Papa schickst.</p>
     </div>`;
@@ -1034,15 +1046,15 @@ function auffrischen(mehrNeue) {
   const uhrLaeuft = $("#leiste") && !$("#leiste").hidden;
   if (mehrNeue && seite !== "" && seite !== "ergebnisse" && !uhrLaeuft) neuBanner(true);   // auf der Startseite zeigt der Knopf die Zahl
 }
-function neuBanner(zeigen) {
+function neuBanner(zeigen, text, ziel) {
   const alt = $("#neu-banner");
   if (alt) alt.remove();
   if (!zeigen) return;
   const b = document.createElement("button");
   b.id = "neu-banner";
   b.className = "neu-banner nicht-drucken";
-  b.textContent = "📬 Neues Ergebnis da! Ansehen ›";
-  b.addEventListener("click", () => { b.remove(); location.hash = "#/ergebnisse"; });
+  b.textContent = text || "📬 Neues Ergebnis da! Ansehen ›";
+  b.addEventListener("click", () => { b.remove(); location.hash = ziel || "#/ergebnisse"; });
   document.body.appendChild(b);
 }
 function nachNeuemAchten() {
@@ -1051,6 +1063,10 @@ function nachNeuemAchten() {
   document.addEventListener("visibilitychange", () => { if (!document.hidden) nachNeuemSehen(); });
   window.addEventListener("pageshow", (e) => { if (e.persisted) nachNeuemSehen(); });
   window.addEventListener("focus", () => nachNeuemSehen());
+  // Nachrichten von Papa: beim Öffnen, alle 3 Minuten und wenn die Lernmappe wieder nach vorn kommt
+  setTimeout(briefeLaden, 4000);
+  setInterval(() => { if (!document.hidden) briefeLaden(); }, 3 * 60000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) briefeLaden(); });
 }
 
 // ---------- Vorlesen (Sprachausgabe des Geräts, offline, keine KI) ----------
@@ -1163,9 +1179,9 @@ function fotoName(was, i, nr) {
   const d = new Date(), zeit = `${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}`;
   return `${heuteISO()}_${zeit}_${(was || "Foto").replace(/[^\wäöüÄÖÜß-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60)}${nr ? "_Nr-" + nr : ""}_${i + 1}.jpg`;
 }
-async function fotoHochladen(blob, name, was) {
+async function fotoHochladen(blob, name, was, ordner) {
   const antwort = await fetch(KIND.upload.url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify({ token: KIND.upload.token, name, beschreibung: was, bild: await blobZuB64(blob) }) });
+    body: JSON.stringify({ token: KIND.upload.token, name, beschreibung: was, ordner: ordner || "", bild: await blobZuB64(blob) }) });
   const j = await antwort.json();
   if (!j.ok) throw new Error(j.fehler || "Hochladen hat nicht geklappt");
 }
@@ -1192,6 +1208,7 @@ function fotoOberflaeche(ziel, t, infoText, schliessen, ort) {
     <input type="file" id="foto-input" accept="image/*" capture="environment" class="unsichtbar" tabindex="-1" aria-hidden="true">
     <div class="knoepfe"><button class="btn" id="foto-knopf">📷 Foto aufnehmen</button><button class="btn gut" id="foto-senden" disabled>⬆️ Hochladen</button></div>
     <div id="foto-meldung"></div>
+    ${t ? "" : `<p class="leise klein">Seiten aus dem Schulbuch oder leere Arbeitsblätter schickst du besser über <a href="#/buch">📚 Buchseiten schicken</a>.</p>`}
     <p class="leise klein">Tipp: Leg das Blatt flach auf den Tisch, halt das iPad gerade darüber und achte auf gutes Licht. Jede Seite ein eigenes Foto.</p>`;
   const zeigeFotos = () => {
     $("#fotos").innerHTML = fotoListe.map((f, i) => `<figure><img src="${f.url}" alt="Foto ${i + 1}"><button data-weg="${i}" aria-label="Foto ${i + 1} löschen">✕</button></figure>`).join("");
@@ -1281,6 +1298,242 @@ function fotoOverlay(t, infoText, ort) {
   $("#foto-input").click();   // noch im Tipp des Kindes, damit Safari die Kamera öffnen darf
 }
 
+// ---------- Buchseiten für Papa: Material aus Schulbuch und Arbeitsblättern ----------
+// Wird nicht korrigiert. Das Google-Skript legt die Fotos im Unterordner „Buchseiten“ ab, Beschreibung beginnt mit „Buchseite“.
+const BUCH_FAECHER = ["Deutsch", "Mathe", "Englisch", "Natur und Technik", "Geografie", "Anderes"];
+function seiteBuch() {
+  const direkt = !!(KIND.upload && KIND.upload.url);
+  fotoListe.forEach((f) => URL.revokeObjectURL(f.url));
+  fotoListe = [];
+  let fach = "", nr = null;
+  app().innerHTML = `<a class="zurueck" href="#/">‹ Meine Lernmappe</a>
+    <h1>📚 Buchseiten für Papa</h1>
+    <p>Schick hier Seiten aus deinem Schulbuch, Vokabellisten oder neue Arbeitsblätter. Daraus werden neue Übungen für dich. <b>Deine eigenen Lösungen</b> lädst du weiter mit <a href="#/foto">📷 Meine Lösung hochladen</a> hoch, die werden korrigiert.</p>
+    <div class="feld"><span>Welches Fach?</span><div class="knoepfe" id="buch-fach" style="margin:0">${BUCH_FAECHER.map((f) => `<button class="btn hell" data-fach="${esc(f)}">${esc(f)}</button>`).join("")}</div></div>
+    <label class="feld"><span>Welche Seiten? Was ist es?</span><input id="buch-was" placeholder="z. B. Buch S. 34–37 oder Vokabeln Unit 2"></label>
+    <div class="fotos" id="fotos"></div>
+    <input type="file" id="buch-kamera" accept="image/*" capture="environment" class="unsichtbar" tabindex="-1" aria-hidden="true">
+    <input type="file" id="buch-galerie" accept="image/*" multiple class="unsichtbar" tabindex="-1" aria-hidden="true">
+    <div class="knoepfe"><button class="btn" id="foto-knopf">📷 Seite fotografieren</button><button class="btn hell" id="galerie-knopf">🖼️ Aus meinen Fotos</button><button class="btn gut" id="foto-senden" disabled>⬆️ An Papa schicken</button></div>
+    <div id="foto-meldung"></div>
+    <p class="leise klein">Tipp: Jede Seite ein eigenes Foto. Leg das Buch flach hin, halt das iPad gerade darüber und achte darauf, dass die ganze Seite scharf drauf ist.</p>`;
+  const meldung = (html) => { $("#foto-meldung").innerHTML = html; };
+  const zeigeFotos = () => {
+    $("#fotos").innerHTML = fotoListe.map((f, i) => `<figure><img src="${f.url}" alt="Seite ${i + 1}"><button data-weg="${i}" aria-label="Seite ${i + 1} löschen">✕</button></figure>`).join("");
+    $$("#fotos [data-weg]").forEach((b) => b.addEventListener("click", () => { const [f] = fotoListe.splice(+b.dataset.weg, 1); URL.revokeObjectURL(f.url); zeigeFotos(); }));
+    $("#foto-knopf").textContent = fotoListe.length ? "📷 Noch eine Seite" : "📷 Seite fotografieren";
+    $("#foto-senden").disabled = !fotoListe.length;
+    $("#foto-senden").textContent = fotoListe.length > 1 ? `⬆️ ${fotoListe.length} Seiten an Papa schicken` : "⬆️ An Papa schicken";
+  };
+  $$("#buch-fach [data-fach]").forEach((b) => b.addEventListener("click", () => {
+    fach = b.dataset.fach;
+    $$("#buch-fach [data-fach]").forEach((x) => x.classList.toggle("hell", x !== b));
+    meldung("");
+  }));
+  const dazu = async (e) => {
+    const dateien = [...(e.target.files || [])];
+    e.target.value = "";
+    if (!dateien.length) return;
+    meldung(`<p class="leise">Foto wird vorbereitet …</p>`);
+    for (const d of dateien) { const blob = await verkleinern(d); fotoListe.push({ blob, url: URL.createObjectURL(blob) }); }
+    meldung("");
+    zeigeFotos();
+  };
+  $("#buch-kamera").addEventListener("change", dazu);
+  $("#buch-galerie").addEventListener("change", dazu);
+  $("#foto-knopf").addEventListener("click", () => $("#buch-kamera").click());
+  $("#galerie-knopf").addEventListener("click", () => $("#buch-galerie").click());
+  $("#foto-senden").addEventListener("click", async () => {
+    if (!fach) { meldung(`<p class="rueckmeldung schlecht">Tipp oben noch auf das Fach.</p>`); return; }
+    const seiten = $("#buch-was").value.trim();
+    const was = `Buchseite ${fach}${seiten ? ": " + seiten : ""}`;
+    const knopf = $("#foto-senden");
+    knopf.disabled = true;
+    if (!nr) nr = neueNr();
+    const fertig = (wie) => {
+      const tg = tag();
+      tg.buchseiten = (tg.buchseiten || 0) + fotoListe.length;
+      merke(`Buchseiten geschickt (${wie}): ${was}, ${fotoListe.length} ${fotoListe.length === 1 ? "Foto" : "Fotos"}`);
+      nr = null;
+      fotoListe.forEach((f) => URL.revokeObjectURL(f.url));
+      fotoListe = [];
+      zeigeFotos();
+      $("#buch-was").value = "";
+      meldung(`<div class="erkl gut"><b>Angekommen! ✅</b><br>Danke! Daraus werden neue Übungen für dich. Noch mehr Seiten? Dann einfach weiter fotografieren.</div>`);
+      toast("Geschickt! 📚");
+    };
+    if (direkt) {
+      try {
+        for (let i = 0; i < fotoListe.length; i++) {
+          meldung(`<p class="leise">Seite ${i + 1} von ${fotoListe.length} wird geschickt …</p>`);
+          await fotoHochladen(fotoListe[i].blob, fotoName(was, i, nr), `${was} (Nr. ${nr}, Material zum Üben, nicht korrigieren)`, "Buchseiten");
+        }
+        return fertig("direkt");
+      } catch (_) {
+        meldung(`<p class="rueckmeldung schlecht">Das Schicken hat nicht geklappt. Ist das Internet an?</p>
+          <div class="knoepfe"><button class="btn" id="foto-nochmal">↺ Nochmal versuchen</button><button class="btn hell" id="foto-teilen">📨 Über Nachrichten schicken</button></div>`);
+        $("#foto-nochmal").addEventListener("click", () => knopf.click());
+        $("#foto-teilen").addEventListener("click", async () => { if ((await fotoTeilen(was, nr, "")) === "ok") fertig("Teilen"); });
+        knopf.disabled = false;
+        return;
+      }
+    }
+    const ergebnis = await fotoTeilen(was, nr, "");
+    if (ergebnis === "ok") return fertig("Teilen");
+    knopf.disabled = false;
+    if (ergebnis === "geht-nicht") meldung(`<p class="rueckmeldung schlecht">Dieses Gerät kann die Fotos hier nicht verschicken. Zeig Papa einfach das Buch.</p>`);
+  });
+}
+
+// ---------- Nachrichten zwischen Valentina und Papa ----------
+// Über das Google-Skript: Valentinas Nachricht geht sofort per Mail an Papa und in die Tabelle „Lernmappe Valentina – Nachrichten“.
+// Papa schreibt seine Antwort in diese Tabelle (neue Zeile, Spalte „Nachricht“). Die App holt sie alle 3 Minuten ab.
+const BRIEF_ARTEN = [["hilfe", "🛠️ Etwas funktioniert nicht"], ["frage", "❓ Ich habe eine Frage"], ["gruss", "👋 Einfach so"]];
+let briefeLaufen = false, letzteSeite = "#/";
+const briefSchluessel = (b) => `${b.id}|${String(b.text || "").length}|${String(b.text || "").slice(0, 16)}`;
+const vonMir = (b) => { const v = String(b.von || "").trim().toLowerCase(); return v === "valentina" || v === String(KIND.name || "").toLowerCase(); };
+function neueBriefe() {
+  const g = S.briefGelesen || {};
+  return (S.briefe || []).filter((b) => !vonMir(b) && !g[briefSchluessel(b)]).length;
+}
+function briefKnopf() {
+  const n = neueBriefe();
+  if (!n) return "";
+  const letzter = (S.briefe || []).filter((b) => !vonMir(b)).slice(-1)[0] || {};
+  return `<a class="ergebnis-knopf brief-knopf" href="#/nachrichten"><div><b>💌 ${n === 1 ? "Neue Nachricht" : n + " neue Nachrichten"} von ${esc(letzter.von || "Papa")}</b><small>Tipp hier, um sie zu lesen</small></div><span class="pfeil">›</span></a>`;
+}
+function briefZeit(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
+  const uhr = d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  if (d.toDateString() === new Date().toDateString()) return `heute, ${uhr}`;
+  return `${d.toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "numeric" })}, ${uhr}`;
+}
+async function briefeLaden() {
+  if (!(KIND.upload && KIND.upload.url) || briefeLaufen) return false;
+  briefeLaufen = true;
+  try {
+    const g = S.briefGelesen || {};
+    const gelesen = (S.briefe || []).filter((b) => !vonMir(b) && !b.gelesen && g[briefSchluessel(b)]).map((b) => b.id);
+    const antwort = await fetch(KIND.upload.url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ token: KIND.upload.token, art: "briefe", gelesen }) });
+    const j = await antwort.json();
+    if (!j.ok || !Array.isArray(j.briefe)) return false;
+    const vorher = JSON.stringify(S.briefe || []), neuVorher = neueBriefe();
+    S.briefe = j.briefe.slice(-60);
+    speichern();
+    if (JSON.stringify(S.briefe) === vorher) return false;
+    briefeAuffrischen(neueBriefe() > neuVorher);
+    return true;
+  } catch (_) { return false; }
+  finally { briefeLaufen = false; }
+}
+function briefeAuffrischen(mehrNeue) {
+  if ($("#foto-overlay")) return;
+  const seite = location.hash.replace(/^#\/?/, "").split("/")[0];
+  if (seite === "nachrichten") return briefeZeigen();
+  if (seite === "") { const y = window.pageYOffset; route(); window.scrollTo(0, y); return; }
+  const uhrLaeuft = $("#leiste") && !$("#leiste").hidden;
+  if (mehrNeue && !uhrLaeuft) neuBanner(true, "💌 Neue Nachricht von Papa! Lesen ›", "#/nachrichten");
+}
+function briefeZeigen() {
+  const ziel = $("#briefe");
+  if (!ziel) return;
+  const g = S.briefGelesen = S.briefGelesen || {};
+  const liste = (S.briefe || []).slice(-30);
+  ziel.innerHTML = liste.length ? liste.map((b) => {
+    const mir = vonMir(b), neu = !mir && !g[briefSchluessel(b)];
+    return `<div class="brief${mir ? " mir" : ""}"><small>${mir ? "Du" : esc(b.von || "Papa")}${briefZeit(b.datum) ? " · " + briefZeit(b.datum) : ""}${neu ? ` <span class="neu-zahl">Neu</span>` : ""}</small><div>${esc(b.text).replace(/\n/g, "<br>")}</div></div>`;
+  }).join("") : `<p class="leise">${KIND.upload && KIND.upload.url ? "Noch keine Nachrichten. Wenn Papa dir schreibt, steht es hier." : "Nachrichten gehen erst, wenn Papa das Hochladen eingerichtet hat."}</p>`;
+  let geaendert = false;
+  liste.forEach((b) => { if (!vonMir(b) && !g[briefSchluessel(b)]) { g[briefSchluessel(b)] = Date.now(); geaendert = true; } });
+  if (geaendert) { speichern(); neuBanner(false); setTimeout(briefeLaden, 1500); }   // Papa sieht in der Tabelle, dass sie es gelesen hat
+}
+function technikInfo() {
+  const zuletzt = (S.log || []).slice(-6).map((l) => `${new Date(l.t).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })} ${l.text}`).join("\n");
+  return [`Seite davor: ${letzteSeite}`, `Online: ${navigator.onLine ? "ja" : "nein"}`, `Paket: ${String((window.LM_PAKET || {}).iv || "").slice(0, 6)}`,
+    `Gerät: ${navigator.userAgent}`, "Zuletzt in der App:", zuletzt].join("\n");
+}
+function seiteNachrichten() {
+  const direkt = !!(KIND.upload && KIND.upload.url);
+  let art = "", bild = null;
+  app().innerHTML = `<a class="zurueck" href="#/">‹ Meine Lernmappe</a>
+    <h1>💬 Nachrichten mit Papa</h1>
+    <div id="briefe" class="briefe"></div>
+    <h2>Papa schreiben</h2>
+    <div class="feld"><span>Worum geht es?</span><div class="knoepfe" id="brief-art" style="margin:0">${BRIEF_ARTEN.map(([k, txt]) => `<button class="btn hell" data-art="${k}">${txt}</button>`).join("")}</div></div>
+    <label class="feld"><span>Deine Nachricht</span><textarea id="brief-text" rows="4" maxlength="2000" placeholder="Schreib hier, was los ist. Wenn etwas nicht klappt: Wo warst du, und was ist passiert?"></textarea></label>
+    <div class="fotos" id="brief-bild"></div>
+    <input type="file" id="brief-datei" accept="image/*" class="unsichtbar" tabindex="-1" aria-hidden="true">
+    <div class="knoepfe"><button class="btn gut" id="brief-senden">📨 Abschicken</button><button class="btn hell" id="bild-knopf">🖼️ Bildschirmfoto anhängen</button></div>
+    <div id="brief-meldung"></div>
+    <p class="leise klein">Papa bekommt deine Nachricht sofort als Mail, auch wenn er nicht zu Hause ist. Seine Antwort erscheint hier oben.<br>
+    Bildschirmfoto machen: obere Taste und Lauter-Taste gleichzeitig kurz drücken (bei iPads mit runder Home-Taste: obere Taste und Home-Taste).</p>`;
+  const meldung = (html) => { $("#brief-meldung").innerHTML = html; };
+  const bildZeigen = () => {
+    $("#brief-bild").innerHTML = bild ? `<figure><img src="${bild.url}" alt="Angehängtes Bild"><button id="bild-weg" aria-label="Bild entfernen">✕</button></figure>` : "";
+    ($("#bild-weg") || KEIN).addEventListener("click", () => { URL.revokeObjectURL(bild.url); bild = null; bildZeigen(); });
+    $("#bild-knopf").textContent = bild ? "🖼️ Anderes Bild" : "🖼️ Bildschirmfoto anhängen";
+  };
+  $$("#brief-art [data-art]").forEach((b) => b.addEventListener("click", () => {
+    art = art === b.dataset.art ? "" : b.dataset.art;
+    $$("#brief-art [data-art]").forEach((x) => x.classList.toggle("hell", x.dataset.art !== art));
+  }));
+  $("#bild-knopf").addEventListener("click", () => $("#brief-datei").click());
+  $("#brief-datei").addEventListener("change", async (e) => {
+    const d = (e.target.files || [])[0];
+    e.target.value = "";
+    if (!d) return;
+    if (bild) URL.revokeObjectURL(bild.url);
+    const blob = await verkleinern(d);
+    bild = { blob, url: URL.createObjectURL(blob) };
+    bildZeigen();
+  });
+  const leeren = () => { $("#brief-text").value = ""; if (bild) URL.revokeObjectURL(bild.url); bild = null; bildZeigen(); art = ""; $$("#brief-art [data-art]").forEach((x) => x.classList.add("hell")); };
+  $("#brief-senden").addEventListener("click", async () => {
+    const text = $("#brief-text").value.trim();
+    if (!text && !bild) { meldung(`<p class="rueckmeldung schlecht">Schreib erst etwas hinein.</p>`); return; }
+    const eintrag = BRIEF_ARTEN.filter((a) => a[0] === art)[0];
+    const thema = eintrag ? eintrag[1].replace(/^\S+\s/, "") : "";
+    const info = art === "hilfe" ? technikInfo() : "";
+    const knopf = $("#brief-senden");
+    knopf.disabled = true;
+    meldung(`<p class="leise">Wird abgeschickt …</p>`);
+    if (direkt) {
+      try {
+        const antwort = await fetch(KIND.upload.url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ token: KIND.upload.token, art: "nachricht", name: KIND.name, thema, text, info, bild: bild ? await blobZuB64(bild.blob) : "" }) });
+        const j = await antwort.json();
+        if (!j.ok) throw new Error(j.fehler || "nicht ok");
+        if (Array.isArray(j.briefe)) { S.briefe = j.briefe.slice(-60); speichern(); }
+        merke(`Nachricht an Papa geschickt${thema ? ` (${thema})` : ""}`);
+        leeren();
+        briefeZeigen();
+        knopf.disabled = false;
+        meldung(`<div class="erkl gut"><b>Abgeschickt! ✅</b><br>Papa bekommt deine Nachricht gleich als Mail. Seine Antwort steht dann hier oben.</div>`);
+        toast("Abgeschickt! 📨");
+        return;
+      } catch (_) { /* weiter unten: über das Teilen-Menü */ }
+    }
+    knopf.disabled = false;
+    const ganz = `${thema ? thema + ": " : ""}${text}${info ? "\n\n" + info : ""}`;
+    meldung(`<p class="rueckmeldung schlecht">${direkt ? "Über die Lernmappe ging es gerade nicht. Ist das Internet an?" : "Schick die Nachricht über das Teilen-Menü."}</p>
+      <div class="knoepfe">${direkt ? `<button class="btn" id="brief-nochmal">↺ Nochmal versuchen</button>` : ""}<button class="btn hell" id="brief-teilen">📨 Über Nachrichten schicken</button></div>`);
+    ($("#brief-nochmal") || KEIN).addEventListener("click", () => knopf.click());
+    $("#brief-teilen").addEventListener("click", async () => {
+      const daten = { title: "Nachricht an Papa", text: ganz };
+      if (bild) { const f = new File([bild.blob], "Bildschirmfoto.jpg", { type: "image/jpeg" }); if (navigator.canShare && navigator.canShare({ files: [f] })) daten.files = [f]; }
+      if (navigator.share) {
+        try { await navigator.share(daten); merke("Nachricht an Papa über Teilen geschickt"); leeren(); meldung(`<div class="erkl gut"><b>Abgeschickt! ✅</b></div>`); return; }
+        catch (e) { if (e && e.name === "AbortError") return; }
+      }
+      location.href = `mailto:?subject=${encodeURIComponent("Nachricht von " + (KIND.name || "Valentina"))}&body=${encodeURIComponent(ganz)}`;
+    });
+  });
+  briefeZeigen();
+  briefeLaden();
+}
+
 // ---------- Bericht für Papa ----------
 function bericht() {
   const z = [`Lernmappe ${KIND.name} – Stand ${new Date().toLocaleString("de-DE")}`, ""];
@@ -1337,6 +1590,13 @@ function seiteBericht() {
 
 // ---------- Navigation ----------
 function route() {
+  const seite = location.hash.replace(/^#\/?/, "").split("/")[0];
+  if (seite !== "nachrichten") letzteSeite = location.hash || "#/";
+  seiteZeigen();
+  // Unten auf jeder Seite (außer Start und Nachrichten): Hilfe-Link zu Papa
+  if (seite && seite !== "nachrichten" && !$("#hilfe-zeile")) app().insertAdjacentHTML("beforeend", `<p class="hilfe-zeile nicht-drucken" id="hilfe-zeile"><a href="#/nachrichten">💬 Klappt etwas nicht? Schreib Papa</a></p>`);
+}
+function seiteZeigen() {
   clearInterval(uhrTimer);
   try { speechSynthesis.cancel(); } catch (_) {}
   fotoSchliessen();
@@ -1345,6 +1605,8 @@ function route() {
   if (p[0] === "bericht") return seiteBericht();
   if (p[0] === "ergebnisse") return seiteErgebnisse();
   if (p[0] === "foto") return seiteFoto(p[1], p[2], p[3]);
+  if (p[0] === "buch") return seiteBuch();
+  if (p[0] === "nachrichten") return seiteNachrichten();
   if (p[0] === "t") {
     const t = thema(p[1]);
     if (!t) return seiteStart();
