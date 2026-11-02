@@ -59,6 +59,8 @@ a.karte:hover,button.karte:hover{border-color:var(--royal)}
 .weiter small{color:#cdd7f5;display:block}
 .weiter b{font-family:var(--font-display);font-size:1.15rem}
 .weiter .pfeil{font-size:1.8rem}
+.weiter.wdh{background:#b4530f}
+.weiter.wdh small{color:#ffe2c7}
 
 /* Reiter */
 .reiter{display:flex;gap:6px;overflow-x:auto;padding:6px 0 10px;margin:14px 0 6px;scrollbar-width:none;border-bottom:2px dashed var(--line)}
@@ -305,6 +307,7 @@ function tagesstand() {
     (t.korrekturen || []).forEach((k) => { if (k.datum === heute) korrekturen.push({ titel: k.titel, ergebnis: k.ergebnis || "", punkte: k.punkte || "" }); });
     if (t.klausur && t.klausur >= heute) klausuren.push({ titel: `${t.fach}: ${t.titel}`, datum: t.klausur, tage: tageBis(t.klausur) });
   });
+  if (wdhPflicht()) offen.unshift(`🔁 Fehler-Wiederholung: ${wdhHeute().length} Aufgaben noch nicht gemacht`);
   const aktuell = LM.themen.map((t) => { const i = aktuellerSchritt(t); return i < 0 ? null : { thema: `${t.fach}: ${t.titel}`, titel: t.lernplan[i].titel, datum: t.lernplan[i].datum || "" }; }).filter(Boolean);
   return { aktuell, datum: heute, name: KIND.name, minuten: Math.round(tg.sekunden / 60), tag: tg, ziele, offen, korrekturen, klausuren, gesendetUm: new Date().toLocaleTimeString("de-DE") };
 }
@@ -392,6 +395,7 @@ function seiteStart() {
       <div><p class="hand">Hallo ${esc(KIND.name)}!</p><h1>Meine Lernmappe</h1></div>
       <div class="etikett">Name <b>${esc(KIND.name)}</b><br>Klasse <b>${esc(KIND.klasse)}</b></div>
     </div>
+    ${wdhKnopf()}
     ${n ? `<a class="weiter" href="#/t/${n.t.id}/plan"><div><small>${esc(n.t.fach)} · Als Nächstes</small><b>${esc(n.s.titel)}</b></div><span class="pfeil">›</span></a>`
         : LM.themen.length ? `<p class="hand">Alles erledigt, was heute dran ist. Super! 🎉</p>` : ""}
     ${briefKnopf()}
@@ -541,6 +545,7 @@ function seitePlan(t) {
         return `<li class="${st.ok ? "ok" : ""}">${st.ok ? "✅" : "⭕"} <a href="${linkZu(t, a.ziel)}">${fmt(a.text)}</a>${st.ok ? "" : `<span class="warum">${esc(st.warum)}</span>`}</li>`;
       }).join("")}</ul>
       ${offen ? `<p class="leise" style="margin-top:10px">Noch ${offen} ${offen === 1 ? "Aufgabe" : "Aufgaben"}. Wenn alles fehlerfrei ist, schließt du den Tag ab und der nächste wird frei.</p>`
+        : wdhPflicht() ? `<div class="erkl"><b>Fast geschafft!</b> Bevor du den Tag abschließt, wiederhol noch kurz deine Fehler von gestern.</div><div class="knoepfe"><a class="btn gut" href="#/wiederholen">🔁 Jetzt wiederholen (${wdhHeute().length})</a></div>`
         : `<div class="knoepfe"><button class="btn gut" id="abschliessen">🎉 Tag abschließen</button></div>`}
     </div>`;
   };
@@ -633,7 +638,7 @@ function seiteQuiz(t, qid) {
       const gewaehlt = opts[+b.dataset.i];
       antworten[nr] = gewaehlt.richtig;
       $$(".option").forEach((x) => { x.disabled = true; if (opts[+x.dataset.i].richtig) x.classList.add("richtig"); });
-      if (!gewaehlt.richtig) b.classList.add("falsch");
+      if (!gewaehlt.richtig) { b.classList.add("falsch"); wdhFehler(t, "quiz", q.id, q.fragen.indexOf(f)); }
       $("#erkl").innerHTML = `<div class="erkl ${gewaehlt.richtig ? "gut" : ""}"><b>${gewaehlt.richtig ? ["Richtig! 🎉", "Genau! ✅", "Stimmt! 👍"][nr % 3] : "Nicht ganz."}</b><br>${fmt(f.erklaerung)}</div>
         <button class="btn breit" id="weiter">${nr + 1 < fragen.length ? "Weiter" : "Ergebnis ansehen"}</button>`;
       $("#weiter").addEventListener("click", () => { nr++; nr < fragen.length ? frage() : ende(); });
@@ -681,7 +686,7 @@ function seiteKarten(t, kid) {
       <div class="knoepfe" id="bew" hidden><button class="btn hell" id="nochmal">↺ Nochmal</button><button class="btn gut" id="gewusst">✓ Wusste ich</button></div>`;
     $("#kk").addEventListener("click", () => { $("#kk").classList.toggle("um"); $("#bew").hidden = false; });
     $("#gewusst").addEventListener("click", () => { if (!gesehen.has(c.i)) ersterVersuch.add(c.i); gesehen.add(c.i); stapel.shift(); zeige(); });
-    $("#nochmal").addEventListener("click", () => { gesehen.add(c.i); stapel.push(stapel.shift()); zeige(); });
+    $("#nochmal").addEventListener("click", () => { if (!gesehen.has(c.i)) wdhFehler(t, "karten", k.id, c.i); gesehen.add(c.i); stapel.push(stapel.shift()); zeige(); });
   };
   const ende = () => {
     S.karten[key] = { gewusst: [...ersterVersuch], total: k.karten.length, mal: ((S.karten[key] || {}).mal || 0) + 1 };
@@ -746,7 +751,7 @@ function seiteUeben(t, uid) {
       tg.versuche++;
       tg.ziele["ueben:" + u.id] = true;
       if (ok) tg.geloest++;
-      else { tg.fehler++; fehlerMerken({ wo: `${u.titel}, Aufgabe ${nr + 1}`, schrieb: String(wert || "").slice(0, 40), richtig: ohneZeichen((a.antworten || [])[0]) }); }
+      else { tg.fehler++; wdhFehler(t, "ueben", u.id, nr); fehlerMerken({ wo: `${u.titel}, Aufgabe ${nr + 1}`, schrieb: String(wert || "").slice(0, 40), richtig: ohneZeichen((a.antworten || [])[0]) }); }
       if (!ok && wert && !(st.falsch || []).includes(wert)) st.falsch = [...(st.falsch || []), String(wert).slice(0, 40)].slice(-3);
       if (ok) {
         st.ok = true;
@@ -766,7 +771,7 @@ function seiteUeben(t, uid) {
     else { $("#ef").addEventListener("submit", (e) => { e.preventDefault(); const v = $("#ein").value; if (v.trim()) pruefe(v); }); if (!st.ok) $("#ein").focus(); }
     ($("#hoer") || KEIN).addEventListener("click", () => sprich(a.sprich, 0.8));
     ($("#tipp") || KEIN).addEventListener("click", () => { st.tipps++; speichern(); zeige(); });
-    ($("#zeig") || KEIN).addEventListener("click", () => { st.loesung = true; tag().loesungen++; merke(`${t.titel}: „${u.titel}“ Aufgabe ${nr + 1} Lösung angesehen`); zeige(); });
+    ($("#zeig") || KEIN).addEventListener("click", () => { st.loesung = true; tag().loesungen++; wdhFehler(t, "ueben", u.id, nr); merke(`${t.titel}: „${u.titel}“ Aufgabe ${nr + 1} Lösung angesehen`); zeige(); });
     ($("#zurueck") || KEIN).addEventListener("click", () => { nr--; zeige(); });
     // Weiter zur nächsten noch offenen Aufgabe (in der Fehler-Runde werden gelöste übersprungen)
     $("#vor").addEventListener("click", () => {
@@ -789,6 +794,195 @@ function seiteUeben(t, uid) {
       zeige();
       window.scrollTo(0, 0);
     });
+  };
+  zeige();
+}
+
+// ---------- Wiederholung: Fehler kommen am nächsten Tag wieder, bis sie sitzen ----------
+// S.wdh[key] = { t, art ("ueben" | "quiz" | "karten"), ref, i, faellig, serie, mal, seit }
+// Falsch → morgen wieder. Richtig → in 3 Tagen zur Kontrolle. Zweimal hintereinander richtig → geschafft.
+const WDH_PRO_TAG = 10;
+const plusTage = (iso, n) => { const d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+const wdhKey = (t, art, ref, i) => `${t.id}|${art}:${ref}:${i}`;
+function wdhFehler(t, art, ref, i, faellig) {
+  if (!(i >= 0)) return;
+  S.wdh = S.wdh || {};
+  const k = wdhKey(t, art, ref, i), alt = S.wdh[k] || {};
+  S.wdh[k] = { t: t.id, art, ref, i, faellig: faellig || plusTage(heuteISO(), 1), serie: 0, mal: (alt.mal || 0) + 1, seit: alt.seit || heuteISO() };
+  speichern();
+}
+function wdhInhalt(e) {
+  const t = thema(e.t);
+  if (!t) return null;
+  if (e.art === "ueben") { const u = (t.uebungen || []).find((x) => x.id === e.ref), a = u && u.aufgaben[e.i]; return a ? { t, u, a } : null; }
+  if (e.art === "quiz") { const q = (t.quizze || []).find((x) => x.id === e.ref), f = q && q.fragen[e.i]; return f ? { t, q, f } : null; }
+  if (e.art === "karten") { const k = (t.karten || []).find((x) => x.id === e.ref), c = k && k.karten[e.i]; return c ? { t, k, c } : null; }
+  return null;
+}
+function wdhFaellig() {
+  const heute = heuteISO();
+  return Object.keys(S.wdh || {}).map((k) => Object.assign({ key: k }, S.wdh[k]))
+    .filter((e) => e.faellig <= heute && wdhInhalt(e))
+    .sort((a, b) => a.faellig.localeCompare(b.faellig) || a.key.localeCompare(b.key));
+}
+const wdhHeute = () => wdhFaellig().slice(0, WDH_PRO_TAG);
+const wdhPflicht = () => S.wdhErledigt !== heuteISO() && wdhHeute().length > 0;
+// Einmalig beim ersten Start mit dieser Funktion: bisherige Fehler aus Übungen und Karteikarten übernehmen
+function wdhStart() {
+  if (S.wdhStart) return;
+  S.wdhStart = heuteISO();
+  LM.themen.forEach((t) => {
+    (t.uebungen || []).forEach((u) => {
+      const r = S.uebung[t.id + "/" + u.id] || {};
+      u.aufgaben.forEach((_, i) => { const x = r[i]; if (x && ((x.falsch || []).length || x.loesung || (x.ok && !x.sauber))) wdhFehler(t, "ueben", u.id, i, heuteISO()); });
+    });
+    (t.karten || []).forEach((k) => {
+      const r = S.karten[t.id + "/" + k.id];
+      if (r) k.karten.forEach((_, i) => { if ((r.gewusst || []).indexOf(i) < 0) wdhFehler(t, "karten", k.id, i, heuteISO()); });
+    });
+  });
+  speichern();
+}
+let wdhZurueck = "#/";
+function wdhKnopf() {
+  if (!wdhPflicht()) return "";
+  const n = wdhHeute().length;
+  return `<a class="weiter wdh" href="#/wiederholen"><div><small>Zuerst · ca. ${Math.max(2, Math.ceil(n / 2))} Minuten</small><b>🔁 Fehler wiederholen (${n} ${n === 1 ? "Aufgabe" : "Aufgaben"})</b></div><span class="pfeil">›</span></a>`;
+}
+function seiteWiederholen() {
+  const liste = wdhHeute();
+  const kopf = `<a class="zurueck" href="#/">‹ Meine Lernmappe</a><h1>🔁 Fehler wiederholen</h1>`;
+  if (!liste.length) {
+    app().innerHTML = kopf + `<div class="ergebnis"><div class="gross">🎉</div><p class="hand">Heute gibt es nichts zu wiederholen. Super!</p>
+      <div class="knoepfe" style="justify-content:center"><a class="btn" href="#/">Zur Startseite</a></div></div>`;
+    return;
+  }
+  const runde = liste.map((e) => Object.assign({ e, erst: null }, wdhInhalt(e)));
+  const schlange = runde.slice();
+  let x = null;
+  const was = (r) => r.u ? `„${r.u.titel}“` : r.q ? `Quiz „${r.q.titel}“` : `Karteikarte „${ohneZeichen(r.c.vorne)}“`;
+  // Nur die erste Antwort heute zählt für den Plan. Spätere Durchgänge sind nur zum Festigen.
+  const werten = (r, ok, schrieb) => {
+    if (r.erst !== null) return;
+    r.erst = ok;
+    const e = S.wdh[r.e.key], tg = tag();
+    tg.versuche++;
+    tg.ziele.wiederholung = true;
+    if (!e) return speichern();
+    if (ok) {
+      tg.geloest++;
+      e.serie = (e.serie || 0) + 1;
+      if (e.serie >= 2) { delete S.wdh[r.e.key]; S.wdhGeschafft = (S.wdhGeschafft || 0) + 1; r.geschafft = true; }
+      else e.faellig = plusTage(heuteISO(), 3);
+    } else {
+      tg.fehler++;
+      e.serie = 0;
+      e.mal = (e.mal || 0) + 1;
+      e.faellig = plusTage(heuteISO(), 1);
+      if (r.u) fehlerMerken({ wo: `🔁 Wiederholung ${r.t.fach}: ${was(r)}`, schrieb: String(schrieb || "").slice(0, 40), richtig: ohneZeichen((r.a.antworten || [])[0]) });
+      else fehlerMerken({ wo: `🔁 Wiederholung ${r.t.fach}`, thema: was(r) });
+      if (!r.nochmal) { r.nochmal = true; schlange.push(r); }   // am Ende der Runde noch einmal
+    }
+    speichern();
+  };
+  const weiterKnopf = () => {
+    $("#wnav").innerHTML = `<button class="btn breit" id="wweiter">${schlange.length > 1 ? "Weiter ›" : "Fertig"}</button>`;
+    $("#wweiter").addEventListener("click", () => { schlange.shift(); zeige(); });
+    $("#wweiter").focus();
+  };
+  const zeige = () => {
+    if (!schlange.length) return ende();
+    x = schlange[0];
+    const zweiteRunde = x.erst !== null;
+    let inhalt = "";
+    if (x.a) {
+      const a = x.a;
+      inhalt = `<div class="aufgabe-box">${x.u.anleitung ? `<p class="leise klein">${fmt(x.u.anleitung)}</p>` : ""}<p class="satz">${fmt(a.frage)}</p>
+        ${a.sprich ? `<div class="knoepfe" style="margin:0 0 12px"><button class="btn" id="hoer">🔊 Anhören</button></div>` : ""}
+        ${a.optionen ? `<div class="optionen">${a.optionen.map((o, i) => `<button class="option" data-o="${esc(o)}"><span class="buchst">${"ABCDEF"[i]}</span><span>${fmt(o)}</span></button>`).join("")}</div>`
+          : `<form class="eingabe-zeile" id="ef"><input id="ein" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${esc(a.platzhalter || "Deine Antwort")}"><button class="btn">Prüfen</button></form>`}
+        <div id="rm"></div></div>`;
+    } else if (x.f) {
+      x.opts = mischen(x.f.optionen.map((o, i) => ({ o, richtig: i === x.f.richtig })));
+      inhalt = `<p class="frage">${fmt(x.f.frage)}</p>
+        <div class="optionen">${x.opts.map((o, i) => `<button class="option" data-i="${i}"><span class="buchst">${"ABCDEF"[i]}</span><span>${fmt(o.o)}</span></button>`).join("")}</div><div id="rm"></div>`;
+    } else {
+      inhalt = `<button class="kk" id="kk" aria-label="Karte umdrehen"><div class="innen">
+        <div class="seite vorne">${fmt(x.c.vorne)}<small>Erst selbst überlegen, dann antippen</small></div>
+        <div class="seite hinten">${fmt(x.c.hinten)}</div></div></button>
+        <div class="knoepfe" id="bew" hidden><button class="btn hell" id="nein">↺ Wusste ich nicht</button><button class="btn gut" id="ja">✓ Wusste ich</button></div>`;
+    }
+    const fertig = runde.filter((r) => r.erst !== null).length;
+    app().innerHTML = kopf + `
+      <p class="leise">${zweiteRunde ? "Noch einmal zum Festigen" : `Aufgabe ${fertig + 1} von ${runde.length}`} · ${esc(x.t.fach)}: ${esc(x.t.titel)}</p>
+      <div class="punkte">${runde.map((r) => `<i class="${r === x ? "jetzt" : r.erst === true ? "ok" : ""}"></i>`).join("")}</div>
+      ${inhalt}<div class="knoepfe" id="wnav"></div>`;
+    if (x.a) {
+      const a = x.a, genau = a.genau !== false;
+      const loesung = fmt(a.loesung || (a.antworten || [])[0] || "");
+      let abschreiben = false;
+      if (a.optionen) $$(".option").forEach((b) => b.addEventListener("click", () => {
+        const ok = (a.antworten || []).includes(b.dataset.o);
+        werten(x, ok, b.dataset.o);
+        $$(".option").forEach((o) => { o.disabled = true; if ((a.antworten || []).includes(o.dataset.o)) o.classList.add("richtig"); });
+        if (!ok) b.classList.add("falsch");
+        $("#rm").innerHTML = ok ? `<p class="rueckmeldung gut">Richtig! 🎉 Das sitzt.</p>` : `<div class="loesung"><b>Merk dir:</b> ${loesung}</div>`;
+        weiterKnopf();
+      }));
+      else {
+        $("#ein").focus();
+        $("#ef").addEventListener("submit", (ev) => {
+          ev.preventDefault();
+          const v = $("#ein").value;
+          if (!v.trim()) return;
+          const ok = (a.antworten || []).some((y) => normal(y, genau) === normal(v, genau));
+          if (ok) {
+            if (!abschreiben) werten(x, true, v);
+            $("#ein").disabled = true;
+            $("#ef button").disabled = true;
+            $("#rm").innerHTML = `<p class="rueckmeldung gut">${abschreiben ? "Genau so! ✍️" : "Richtig! 🎉 Das sitzt."}</p>`;
+            weiterKnopf();
+          } else if (!abschreiben) {
+            werten(x, false, v);
+            abschreiben = true;
+            $("#ein").value = "";
+            $("#rm").innerHTML = `<div class="loesung"><b>Richtig ist:</b> ${loesung}</div><p class="rueckmeldung schlecht">Schreib es jetzt einmal richtig ab.</p>`;
+            $("#ein").focus();
+          } else {
+            $("#rm").innerHTML = `<div class="loesung"><b>Richtig ist:</b> ${loesung}</div><p class="rueckmeldung schlecht">Noch nicht ganz. Schau genau hin und schreib es ab.</p>`;
+          }
+        });
+      }
+      ($("#hoer") || KEIN).addEventListener("click", () => sprich(a.sprich, 0.8));
+    } else if (x.f) {
+      $$(".option").forEach((b) => b.addEventListener("click", () => {
+        const ok = x.opts[+b.dataset.i].richtig;
+        werten(x, ok);
+        $$(".option").forEach((o) => { o.disabled = true; if (x.opts[+o.dataset.i].richtig) o.classList.add("richtig"); });
+        if (!ok) b.classList.add("falsch");
+        $("#rm").innerHTML = `<div class="erkl ${ok ? "gut" : ""}"><b>${ok ? "Richtig! 🎉" : "Nicht ganz."}</b><br>${fmt(x.f.erklaerung)}</div>`;
+        weiterKnopf();
+      }));
+    } else {
+      $("#kk").addEventListener("click", () => { $("#kk").classList.toggle("um"); $("#bew").hidden = false; });
+      $("#ja").addEventListener("click", () => { werten(x, true); schlange.shift(); zeige(); });
+      $("#nein").addEventListener("click", () => { werten(x, false); schlange.shift(); zeige(); });
+    }
+  };
+  const ende = () => {
+    S.wdhErledigt = heuteISO();
+    const richtig = runde.filter((r) => r.erst).length, weg = runde.filter((r) => r.geschafft).length;
+    const kontrolle = richtig - weg, morgen = runde.length - richtig;
+    const tg = tag();
+    if (richtig === runde.length) tg.schritte.push(`🔁 Fehler-Wiederholung (${runde.length} Aufgaben)`);
+    merke(`Wiederholung: ${richtig}/${runde.length} beim ersten Mal richtig${weg ? `, ${weg} ganz geschafft` : ""}${morgen ? `, ${morgen} morgen nochmal` : ""}`);
+    const zurueck = /^#\/t\//.test(wdhZurueck) ? wdhZurueck : "#/";
+    app().innerHTML = kopf + `<div class="ergebnis"><div class="gross">${richtig} / ${runde.length}</div>
+      <p class="hand">${richtig === runde.length ? "Alles richtig! Deine Fehler von gestern sitzen jetzt. 🏆" : "Gut gemacht, das war wichtig! 💪"}</p>
+      ${weg ? `<p>⭐ <b>${weg}</b> ${weg === 1 ? "Aufgabe hast du" : "Aufgaben hast du"} jetzt zweimal richtig. Die ${weg === 1 ? "ist" : "sind"} geschafft!</p>` : ""}
+      ${kontrolle ? `<p>✅ <b>${kontrolle}</b> ${kontrolle === 1 ? "Aufgabe kommt" : "Aufgaben kommen"} in 3 Tagen noch einmal zur Kontrolle.</p>` : ""}
+      ${morgen ? `<p>🔁 <b>${morgen}</b> ${morgen === 1 ? "Aufgabe übst" : "Aufgaben übst"} du morgen noch einmal.</p>` : ""}
+      <div class="knoepfe" style="justify-content:center"><a class="btn" href="${zurueck}">${zurueck === "#/" ? "Zur Startseite" : "Weiter lernen ›"}</a></div></div>`;
   };
   zeige();
 }
@@ -1554,6 +1748,7 @@ function bericht() {
     proben(t).forEach((p, i) => { const st = probeStatus(t, i + 1); if (st) z.push(`Probeklausur „${p.titel}“: ${st}`); });
     z.push("");
   }
+  z.push(`Fehler-Wiederholung: ${Object.keys(S.wdh || {}).length} Aufgaben in der Wiederholung, ${S.wdhGeschafft || 0} schon geschafft${wdhPflicht() ? `, heute ${wdhHeute().length} fällig und noch nicht gemacht` : ""}`, "");
   z.push("Letzte Aktivitäten:");
   S.log.slice(-15).reverse().forEach((l) => z.push(`- ${new Date(l.t).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })} ${l.text}`));
   return z.join("\n");
@@ -1592,6 +1787,7 @@ function seiteBericht() {
 function route() {
   const seite = location.hash.replace(/^#\/?/, "").split("/")[0];
   if (seite !== "nachrichten") letzteSeite = location.hash || "#/";
+  if (seite !== "wiederholen") wdhZurueck = location.hash || "#/";
   seiteZeigen();
   // Unten auf jeder Seite (außer Start und Nachrichten): Hilfe-Link zu Papa
   if (seite && seite !== "nachrichten" && !$("#hilfe-zeile")) app().insertAdjacentHTML("beforeend", `<p class="hilfe-zeile nicht-drucken" id="hilfe-zeile"><a href="#/nachrichten">💬 Klappt etwas nicht? Schreib Papa</a></p>`);
@@ -1606,6 +1802,7 @@ function seiteZeigen() {
   if (p[0] === "ergebnisse") return seiteErgebnisse();
   if (p[0] === "foto") return seiteFoto(p[1], p[2], p[3]);
   if (p[0] === "buch") return seiteBuch();
+  if (p[0] === "wiederholen") return seiteWiederholen();
   if (p[0] === "nachrichten") return seiteNachrichten();
   if (p[0] === "t") {
     const t = thema(p[1]);
@@ -1673,6 +1870,7 @@ function loslegen(text) {
   window.removeEventListener("hashchange", aufLinkWarten);
   ladeFortschritt();
   inhaltAnwenden(text);
+  wdhStart();
   window.addEventListener("hashchange", route);
   route();
   nachNeuemAchten();
