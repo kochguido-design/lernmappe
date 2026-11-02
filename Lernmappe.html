@@ -308,7 +308,7 @@ function tagesstand() {
     if (t.klausur && t.klausur >= heute) klausuren.push({ titel: `${t.fach}: ${t.titel}`, datum: t.klausur, tage: tageBis(t.klausur) });
   });
   if (wdhPflicht()) offen.unshift(`🔁 Fehler-Wiederholung: ${wdhHeute().length} Aufgaben noch nicht gemacht`);
-  const aktuell = LM.themen.map((t) => { const i = aktuellerSchritt(t); return i < 0 ? null : { thema: `${t.fach}: ${t.titel}`, titel: t.lernplan[i].titel, datum: t.lernplan[i].datum || "" }; }).filter(Boolean);
+  const aktuell = LM.themen.map((t) => { const i = aktuellerSchritt(t); return i < 0 ? null : { thema: `${t.fach}: ${t.titel}`, titel: t.lernplan[i].titel, datum: t.lernplan[i].datum || "", freiAb: wartetBis(t, i) || "" }; }).filter(Boolean);
   const wiederholung = { faellig: wdhFaellig().length, inWiederholung: Object.keys(S.wdh || {}).length, geschafft: S.wdhGeschafft || 0, heuteGemacht: S.wdhErledigt === heute };
   return { aktuell, datum: heute, name: KIND.name, minuten: Math.round(tg.sekunden / 60), tag: tg, ziele, offen, korrekturen, klausuren, wiederholung, gesendetUm: new Date().toLocaleTimeString("de-DE") };
 }
@@ -374,15 +374,19 @@ function naechsterSchritt() {
   aktiv.sort((a, b) => (a.klausur || "9999").localeCompare(b.klausur || "9999"));
   for (const t of aktiv) {
     const i = aktuellerSchritt(t);
-    if (i >= 0) return { t, i, s: t.lernplan[i] };
+    if (i >= 0 && !wartetBis(t, i)) return { t, i, s: t.lernplan[i] };
   }
   return null;
+}
+function wartendeSchritte() {
+  return LM.themen.map((t) => { const i = aktuellerSchritt(t); return i >= 0 && wartetBis(t, i) ? { t, i, s: t.lernplan[i] } : null; }).filter(Boolean);
 }
 function linkZu(t, ziel) {
   // ziel: "quiz:id", "karten:id", "ueben:id", "merk", "probe"
   const [art, id] = String(ziel).split(":");
   if (art === "merk") return `#/t/${t.id}/merk`;
   if (art === "korrektur") return `#/t/${t.id}/korrektur`;
+  if (art === "fehlercheck") return `#/t/${t.id}/fehlercheck`;
   if (art === "probe") return id ? `#/t/${t.id}/probe/${id}` : `#/t/${t.id}/probe`;
   return `#/t/${t.id}/${art}/${id}`;
 }
@@ -398,7 +402,7 @@ function seiteStart() {
     </div>
     ${wdhKnopf()}
     ${n ? `<a class="weiter" href="#/t/${n.t.id}/plan"><div><small>${esc(n.t.fach)} · Als Nächstes</small><b>${esc(n.s.titel)}</b></div><span class="pfeil">›</span></a>`
-        : LM.themen.length ? `<p class="hand">Alles erledigt, was heute dran ist. Super! 🎉</p>` : ""}
+        : LM.themen.length ? `<p class="hand">Alles erledigt, was heute dran ist. Super! 🎉</p>${wartendeSchritte().map((w) => `<p class="leise">⏳ ${esc(w.t.fach)}: <b>${esc(w.s.titel)}</b> ist am ${datumLang(w.s.datum)} dran.</p>`).join("")}` : ""}
     ${briefKnopf()}
     ${ergebnisKnopf()}
     <h2>Meine Themen</h2>
@@ -439,6 +443,16 @@ function aktuellerSchritt(t) {
   const plan = t.lernplan || [];
   return plan.findIndex((_, i) => !(S.plan[t.id] || {})[i]);   // -1 = alles geschafft
 }
+// Generalprobe (2 Tage vorher) und letzter Tag vor einer Klassenarbeit gehen erst an ihrem Datum auf,
+// auch wenn das Kind vorher mit allem fertig ist. Mit fest: true gilt das für jeden datierten Schritt.
+function wartetBis(t, i) {
+  const s = (t.lernplan || [])[i];
+  if (!s || !s.datum || heuteISO() >= s.datum) return null;
+  return s.fest || (t.klausur && s.datum >= plusTage(t.klausur, -2) && s.datum < t.klausur) ? s.datum : null;
+}
+const wartetText = (t, i) => /generalprobe/i.test(t.lernplan[i].titel)
+  ? "Die Generalprobe schreibst du genau zwei Tage vor der Arbeit. Dann ist alles frisch im Kopf."
+  : "Dieser Tag ist für kurz vor der Arbeit gedacht. Dann ist alles frisch im Kopf.";
 function stufe(t, i) {
   S.stufen = S.stufen || {};
   const k = t.id + "/" + i;
@@ -447,7 +461,7 @@ function stufe(t, i) {
 // Etwas wurde geschafft (z. B. Quiz ohne Fehler): beim aktuellen Schritt eintragen, wenn er dieses Ziel hat.
 function zielGeschafft(t, ziel, zusatz) {
   const i = aktuellerSchritt(t);
-  if (!t || i < 0) return;
+  if (!t || i < 0 || wartetBis(t, i)) return;
   (t.lernplan[i].aufgaben || []).forEach((a) => {
     if (a.ziel === ziel || (a.ziel === "probe" && String(ziel).indexOf("probe:") === 0)) stufe(t, i)[a.ziel + (zusatz || "")] = true;
   });
@@ -483,6 +497,7 @@ function aufgabeStand(t, i, j) {
   if (art === "karten") return { ok: !!st[ziel], warum: "Wisse alle Karten beim ersten Mal." };
   if (art === "merk") return { ok: !!st[ziel], warum: "Lies die Merkzettel." };
   if (art === "korrektur") return { ok: !!st[ziel], warum: "Schau dir deine Korrekturen an." };
+  if (art === "fehlercheck") return { ok: !!st[ziel], warum: "Geh alle deine Fehler durch, bis jeder einmal richtig ist." };
   if (art === "diktat") {
     const g = st[ziel + "#geschrieben"], f = st[ziel + "#foto"];
     return { ok: !!(g && f), warum: !g ? "Schreib das Diktat bis zum Ende." : "Lade ein Foto von deinem Diktat hoch." };
@@ -513,11 +528,17 @@ function inhaltStatus(t, key) {
   const schritte = zuordnung(t)[key], cur = aktuellerSchritt(t);
   if (!schritte) return "extra";
   if (cur < 0) return "frueher";
-  if (schritte.indexOf(cur) >= 0) return "jetzt";
+  if (schritte.indexOf(cur) >= 0) return wartetBis(t, cur) ? "spaeter" : "jetzt";
   return schritte.some((i) => i < cur) ? "frueher" : "spaeter";
 }
 function seiteGesperrt(t) {
-  const cur = aktuellerSchritt(t);
+  const cur = aktuellerSchritt(t), ab = wartetBis(t, cur);
+  if (ab) {
+    app().innerHTML = themaKopf(t, "plan") + `<div class="ergebnis"><div class="gross">⏳</div>
+      <p class="hand">Das ist erst am ${datumLang(ab)} dran.</p><p>${esc(wartetText(t, cur))}</p>
+      <div class="knoepfe" style="justify-content:center"><a class="btn" href="#/t/${t.id}/plan">Zum Lernplan</a></div></div>`;
+    return;
+  }
   app().innerHTML = themaKopf(t, "plan") + `<div class="ergebnis"><div class="gross">🔒</div>
     <p class="hand">Das kommt an einem späteren Tag dran.</p>
     <p>Mach zuerst ${cur >= 0 ? `<b>${esc(t.lernplan[cur].titel)}</b>` : "den aktuellen Tag"} fertig. Danach geht es weiter!</p>
@@ -555,6 +576,9 @@ function seitePlan(t) {
     <div class="balken"><span data-w="${f.prozent}"></span></div><p class="leise klein">${f.fertig} von ${f.gesamt} Tagen geschafft</p>
     ${cur < 0 && plan.length ? `<p class="hand">Du hast alle Tage geschafft! 🏆</p>` : ""}
     ${plan.map((s, i) => {
+      if (i === cur && wartetBis(t, i)) return `<div class="schritt jetzt" id="jetzt"><span class="jetzt-etikett">Ab ${datumKurz(s.datum)}</span>
+        <div class="stitel">${titelZeile(s, i)}</div>
+        <div class="erkl gut"><b>Du bist dem Plan voraus! 🚀</b><br>Alles davor hast du schon geschafft. ${esc(wartetText(t, i))} Bis dahin kannst du deine Fehler wiederholen, freiwillige Extras machen oder in einem anderen Fach weiterlernen.</div></div>`;
       if (i === cur) return jetzt(s, i);
       const fertig = (S.plan[t.id] || {})[i];
       return `<div class="schritt grau ${fertig ? "fertig" : ""}"><span>${fertig ? "✅" : "🔒"}</span>
@@ -810,6 +834,30 @@ function wdhFehler(t, art, ref, i, faellig) {
   S.wdh = S.wdh || {};
   const k = wdhKey(t, art, ref, i), alt = S.wdh[k] || {};
   S.wdh[k] = { t: t.id, art, ref, i, faellig: faellig || plusTage(heuteISO(), 1), serie: 0, mal: (alt.mal || 0) + 1, seit: alt.seit || heuteISO() };
+  archivieren(t.id, art, ref, i);
+  speichern();
+}
+// Alle Fehler, die je passiert sind, für den großen Fehler-Check am Tag vor der Arbeit
+function archivieren(tid, art, ref, i) {
+  S.fehlerArchiv = S.fehlerArchiv || {};
+  const k = `${tid}|${art}:${ref}:${i}`, alt = S.fehlerArchiv[k];
+  S.fehlerArchiv[k] = { t: tid, art, ref, i, mal: ((alt && alt.mal) || 0) + 1 };
+}
+// Einmalig: Fehler von vor dem Archiv übernehmen (aus der Wiederholung und aus den Übungen und Karteikarten)
+function archivStart() {
+  if (S.archivStart) return;
+  S.archivStart = heuteISO();
+  Object.keys(S.wdh || {}).forEach((k) => { const e = S.wdh[k]; archivieren(e.t, e.art, e.ref, e.i); });
+  LM.themen.forEach((t) => {
+    (t.uebungen || []).forEach((u) => {
+      const r = S.uebung[t.id + "/" + u.id] || {};
+      u.aufgaben.forEach((_, i) => { const x = r[i]; if (x && ((x.falsch || []).length || x.loesung || (x.ok && !x.sauber))) archivieren(t.id, "ueben", u.id, i); });
+    });
+    (t.karten || []).forEach((k) => {
+      const r = S.karten[t.id + "/" + k.id];
+      if (r) k.karten.forEach((_, i) => { if ((r.gewusst || []).indexOf(i) < 0) archivieren(t.id, "karten", k.id, i); });
+    });
+  });
   speichern();
 }
 function wdhInhalt(e) {
@@ -828,6 +876,16 @@ function wdhFaellig() {
 }
 const wdhHeute = () => wdhFaellig().slice(0, WDH_PRO_TAG);
 const wdhPflicht = () => S.wdhErledigt !== heuteISO() && wdhHeute().length > 0;
+// Jedes Fach mit Klassenarbeit: Am Tag davor gehört der große Fehler-Check in den Lernplan.
+function fehlerCheckEinbauen() {
+  LM.themen.forEach((t) => {
+    if (!t.klausur) return;
+    const s = (t.lernplan || []).find((x) => x.datum === plusTage(t.klausur, -1));
+    if (s && !(s.aufgaben || []).some((a) => a.ziel === "fehlercheck"))
+      (s.aufgaben = s.aufgaben || []).unshift({ text: "🔁 **Großer Fehler-Check:** Alle deine Fehler aus diesem Fach noch einmal, bis jeder sitzt", ziel: "fehlercheck" });
+  });
+}
+const fehlerVon = (t) => Object.keys(S.fehlerArchiv || {}).map((k) => Object.assign({ key: k }, S.fehlerArchiv[k])).filter((e) => e.t === t.id && wdhInhalt(e));
 // Einmalig beim ersten Start mit dieser Funktion: bisherige Fehler aus Übungen und Karteikarten übernehmen
 function wdhStart() {
   if (S.wdhStart) return;
@@ -850,9 +908,18 @@ function wdhKnopf() {
   const n = wdhHeute().length;
   return `<a class="weiter wdh" href="#/wiederholen"><div><small>Zuerst · ca. ${Math.max(2, Math.ceil(n / 2))} Minuten</small><b>🔁 Fehler wiederholen (${n} ${n === 1 ? "Aufgabe" : "Aufgaben"})</b></div><span class="pfeil">›</span></a>`;
 }
-function seiteWiederholen() {
-  const liste = wdhHeute();
-  const kopf = `<a class="zurueck" href="#/">‹ Meine Lernmappe</a><h1>🔁 Fehler wiederholen</h1>`;
+function seiteWiederholen(check) {
+  const liste = check ? mischen(fehlerVon(check).map((e) => Object.assign({}, e, { key: wdhKey(check, e.art, e.ref, e.i) }))) : wdhHeute();
+  const kopf = check ? themaKopf(check, "plan") + `<h2>🔁 Großer Fehler-Check</h2><p class="leise">Alle Fehler, die dir in diesem Fach passiert sind. Was falsch ist, kommt am Ende noch einmal, bis alles sitzt.</p>`
+    : `<a class="zurueck" href="#/">‹ Meine Lernmappe</a><h1>🔁 Fehler wiederholen</h1>`;
+  if (check && !liste.length) {
+    zielGeschafft(check, "fehlercheck");
+    tag().ziele.fehlercheck = true;
+    app().innerHTML = kopf + `<div class="ergebnis"><div class="gross">🏆</div><p class="hand">In diesem Fach hast du keine Fehler gesammelt. Wow!</p>
+      <div class="knoepfe" style="justify-content:center"><a class="btn" href="#/t/${check.id}/plan">Zum Lernplan</a></div></div>`;
+    speichern();
+    return;
+  }
   if (!liste.length) {
     app().innerHTML = kopf + `<div class="ergebnis"><div class="gross">🎉</div><p class="hand">Heute gibt es nichts zu wiederholen. Super!</p>
       <div class="knoepfe" style="justify-content:center"><a class="btn" href="#/">Zur Startseite</a></div></div>`;
@@ -864,12 +931,26 @@ function seiteWiederholen() {
   const was = (r) => r.u ? `„${r.u.titel}“` : r.q ? `Quiz „${r.q.titel}“` : `Karteikarte „${ohneZeichen(r.c.vorne)}“`;
   // Nur die erste Antwort heute zählt für den Plan. Spätere Durchgänge sind nur zum Festigen.
   const werten = (r, ok, schrieb) => {
-    if (r.erst !== null) return;
+    if (r.erst !== null) {
+      if (check && !ok) schlange.push(r);   // beim Fehler-Check so lange, bis es sitzt
+      return;
+    }
     r.erst = ok;
     const e = S.wdh[r.e.key], tg = tag();
     tg.versuche++;
-    tg.ziele.wiederholung = true;
+    tg.ziele[check ? "fehlercheck" : "wiederholung"] = true;
+    if (check && !e) {   // nicht in der Wiederholung: richtig → gut; falsch → ab morgen wieder in die Wiederholung
+      if (ok) tg.geloest++;
+      else {
+        tg.fehler++;
+        wdhFehler(check, r.e.art, r.e.ref, r.e.i);
+        fehlerMerken({ wo: `🔁 Fehler-Check ${r.t.fach}: ${was(r)}`, schrieb: String(schrieb || "").slice(0, 40), richtig: r.a ? ohneZeichen((r.a.antworten || [])[0]) : "" });
+        schlange.push(r);
+      }
+      return speichern();
+    }
     if (!e) return speichern();
+    if (check && ok && e.faellig > heuteISO()) { tg.geloest++; return speichern(); }   // noch nicht fällig: nur zählen
     if (ok) {
       tg.geloest++;
       e.serie = (e.serie || 0) + 1;
@@ -882,7 +963,7 @@ function seiteWiederholen() {
       e.faellig = plusTage(heuteISO(), 1);
       if (r.u) fehlerMerken({ wo: `🔁 Wiederholung ${r.t.fach}: ${was(r)}`, schrieb: String(schrieb || "").slice(0, 40), richtig: ohneZeichen((r.a.antworten || [])[0]) });
       else fehlerMerken({ wo: `🔁 Wiederholung ${r.t.fach}`, thema: was(r) });
-      if (!r.nochmal) { r.nochmal = true; schlange.push(r); }   // am Ende der Runde noch einmal
+      if (check || !r.nochmal) { r.nochmal = true; schlange.push(r); }   // am Ende der Runde noch einmal
     }
     speichern();
   };
@@ -971,6 +1052,17 @@ function seiteWiederholen() {
     }
   };
   const ende = () => {
+    if (check) {
+      const richtig = runde.filter((r) => r.erst).length;
+      zielGeschafft(check, "fehlercheck");
+      tag().schritte.push(`🔁 Großer Fehler-Check ${check.fach} (${runde.length} Aufgaben, ${richtig} beim ersten Mal richtig)`);
+      merke(`Fehler-Check ${check.fach}: ${richtig}/${runde.length} beim ersten Mal richtig, am Ende alles richtig`);
+      app().innerHTML = kopf + `<div class="ergebnis"><div class="gross">${richtig} / ${runde.length}</div>
+        <p class="hand">${richtig === runde.length ? "Alles sofort richtig! Du bist bereit für die Arbeit. 🏆" : "Geschafft! Jetzt sitzen alle deine Fehler. 💪"}</p>
+        <p>Am Ende hattest du jede Aufgabe richtig. Morgen schaffst du das!</p>
+        <div class="knoepfe" style="justify-content:center"><a class="btn" href="#/t/${check.id}/plan">Zum Lernplan ›</a></div></div>`;
+      return;
+    }
     S.wdhErledigt = heuteISO();
     const richtig = runde.filter((r) => r.erst).length, weg = runde.filter((r) => r.geschafft).length;
     const kontrolle = richtig - weg, morgen = runde.length - richtig;
@@ -1817,6 +1909,7 @@ function seiteZeigen() {
     if (tab === "diktat") return p[3] ? seiteDiktat(t, p[3]) : seiteListe(t, "diktat");
     if (tab === "probe") return seiteProbe(t, p[3]);
     if (tab === "korrektur") return seiteKorrektur(t);
+    if (tab === "fehlercheck") return inhaltStatus(t, "fehlercheck") === "spaeter" ? seiteGesperrt(t) : seiteWiederholen(t);
     return seitePlan(t);
   }
   seiteStart();
@@ -1856,6 +1949,7 @@ function inhaltAnwenden(text) {
   try { new Function(text)(); }   // legt LM_KIND fest und meldet die Themen mit LM.thema(...) an
   catch (e) { LM.themen = altThemen; window.LM_KIND = altKind; throw e; }
   KIND = window.LM_KIND || KIND;
+  fehlerCheckEinbauen();
   // Neustart aus der Ferne: Ist LM_KIND.neustart höher als auf diesem Gerät gespeichert, beginnt der Fortschritt von vorn.
   const neustart = Number(KIND.neustart || 0), vonVorn = (S.neustart || 0) < neustart;
   if (vonVorn) {
@@ -1872,6 +1966,7 @@ function loslegen(text) {
   ladeFortschritt();
   inhaltAnwenden(text);
   wdhStart();
+  archivStart();
   window.addEventListener("hashchange", route);
   route();
   nachNeuemAchten();
