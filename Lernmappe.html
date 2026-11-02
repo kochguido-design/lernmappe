@@ -309,7 +309,8 @@ function tagesstand() {
   });
   if (wdhPflicht()) offen.unshift(`🔁 Fehler-Wiederholung: ${wdhHeute().length} Aufgaben noch nicht gemacht`);
   const aktuell = LM.themen.map((t) => { const i = aktuellerSchritt(t); return i < 0 ? null : { thema: `${t.fach}: ${t.titel}`, titel: t.lernplan[i].titel, datum: t.lernplan[i].datum || "" }; }).filter(Boolean);
-  return { aktuell, datum: heute, name: KIND.name, minuten: Math.round(tg.sekunden / 60), tag: tg, ziele, offen, korrekturen, klausuren, gesendetUm: new Date().toLocaleTimeString("de-DE") };
+  const wiederholung = { faellig: wdhFaellig().length, inWiederholung: Object.keys(S.wdh || {}).length, geschafft: S.wdhGeschafft || 0, heuteGemacht: S.wdhErledigt === heute };
+  return { aktuell, datum: heute, name: KIND.name, minuten: Math.round(tg.sekunden / 60), tag: tg, ziele, offen, korrekturen, klausuren, wiederholung, gesendetUm: new Date().toLocaleTimeString("de-DE") };
 }
 let standTimer = null, standSeit = 0;
 function standPlanen() {
