@@ -381,14 +381,14 @@ function naechsterSchritt() {
   }
   return null;
 }
-// Fokus: die nächste anstehende Klassenarbeit, dazu alle, die höchstens 3 Tage danach kommen.
+// Fokus: die nächste anstehende Klassenarbeit, dazu alle, die höchstens 7 Tage danach kommen.
 // Andere Fächer laufen „nebenbei“ (Guidos Wunsch 5.11.2026).
 function fokusThemen() {
   const kommend = LM.themen.filter((t) => t.klausur && tageBis(t.klausur) >= 0)
     .sort((a, b) => a.klausur.localeCompare(b.klausur));
   if (!kommend.length) return [];
   const erste = tageBis(kommend[0].klausur);
-  return kommend.filter((t) => tageBis(t.klausur) - erste <= 3);
+  return kommend.filter((t) => tageBis(t.klausur) - erste <= 7);
 }
 function wartendeSchritte() {
   return LM.themen.map((t) => { const i = aktuellerSchritt(t); return i >= 0 && wartetBis(t, i) ? { t, i, s: t.lernplan[i] } : null; }).filter(Boolean);
@@ -410,7 +410,7 @@ function seiteStart() {
   const fokus = fokusThemen(), istFokus = (t) => fokus.indexOf(t) >= 0;
   const nebenbei = n && fokus.length && !istFokus(n.t);
   const fokusWartet = wartendeSchritte().filter((w) => istFokus(w.t));
-  const fokusZeile = fokus.length ? `<p class="fokus">🎯 <b>Dein Fokus:</b> ${fokus.map((t) => `${esc(t.fach)}-Arbeit am ${datumLang(t.klausur)} (${bisText(tageBis(t.klausur))})`).join(" und ")}</p>` : "";
+  const fokusZeile = fokus.length ? `<p class="fokus">🎯 <b>Dein Fokus:</b> ${fokus.map((t) => `${esc(t.kurz || t.fach)}-Arbeit am ${datumLang(t.klausur)} (${bisText(tageBis(t.klausur))})`).join(" und ")}</p>` : "";
   app().innerHTML = `
     <div class="kopf">
       <div><p class="hand">Hallo ${esc(KIND.name)}!</p><h1>Meine Lernmappe</h1></div>
