@@ -61,6 +61,9 @@ a.karte:hover,button.karte:hover{border-color:var(--royal)}
 .weiter .pfeil{font-size:1.8rem}
 .weiter.wdh{background:#b4530f}
 .weiter.wdh small{color:#ffe2c7}
+.weiter.nebenbei{background:var(--panel);color:inherit;border:2px dashed var(--royal)}
+.weiter.nebenbei small{color:var(--ink-soft)}
+.fokus{background:#fff4d6;border-left:6px solid #e0a100;border-radius:10px;padding:10px 14px;margin:14px 0 0;color:#5a4300}
 
 /* Reiter */
 .reiter{display:flex;gap:6px;overflow-x:auto;padding:6px 0 10px;margin:14px 0 6px;scrollbar-width:none;border-bottom:2px dashed var(--line)}
@@ -378,6 +381,15 @@ function naechsterSchritt() {
   }
   return null;
 }
+// Fokus: die nächste anstehende Klassenarbeit, dazu alle, die höchstens 3 Tage danach kommen.
+// Andere Fächer laufen „nebenbei“ (Guidos Wunsch 5.11.2026).
+function fokusThemen() {
+  const kommend = LM.themen.filter((t) => t.klausur && tageBis(t.klausur) >= 0)
+    .sort((a, b) => a.klausur.localeCompare(b.klausur));
+  if (!kommend.length) return [];
+  const erste = tageBis(kommend[0].klausur);
+  return kommend.filter((t) => tageBis(t.klausur) - erste <= 3);
+}
 function wartendeSchritte() {
   return LM.themen.map((t) => { const i = aktuellerSchritt(t); return i >= 0 && wartetBis(t, i) ? { t, i, s: t.lernplan[i] } : null; }).filter(Boolean);
 }
@@ -395,13 +407,18 @@ function linkZu(t, ziel) {
 function seiteStart() {
   const n = naechsterSchritt();
   const themen = LM.themen.slice().sort((a, b) => (a.klausur || "9999").localeCompare(b.klausur || "9999"));
+  const fokus = fokusThemen(), istFokus = (t) => fokus.indexOf(t) >= 0;
+  const nebenbei = n && fokus.length && !istFokus(n.t);
+  const fokusWartet = wartendeSchritte().filter((w) => istFokus(w.t));
+  const fokusZeile = fokus.length ? `<p class="fokus">🎯 <b>Dein Fokus:</b> ${fokus.map((t) => `${esc(t.fach)}-Arbeit am ${datumLang(t.klausur)} (${bisText(tageBis(t.klausur))})`).join(" und ")}</p>` : "";
   app().innerHTML = `
     <div class="kopf">
       <div><p class="hand">Hallo ${esc(KIND.name)}!</p><h1>Meine Lernmappe</h1></div>
       <div class="etikett">Name <b>${esc(KIND.name)}</b><br>Klasse <b>${esc(KIND.klasse)}</b></div>
     </div>
     ${wdhKnopf()}
-    ${n ? `<a class="weiter" href="#/t/${n.t.id}/plan"><div><small>${esc(n.t.fach)} · Als Nächstes</small><b>${esc(n.s.titel)}</b></div><span class="pfeil">›</span></a>`
+    ${fokusZeile}
+    ${n ? `${nebenbei ? fokusWartet.map((w) => `<p class="leise">⏳ ${esc(w.t.fach)}: <b>${esc(w.s.titel)}</b> ist am ${datumLang(w.s.datum)} dran. Bis dahin kannst du nebenbei weitermachen:</p>`).join("") : ""}<a class="weiter${nebenbei ? " nebenbei" : ""}" href="#/t/${n.t.id}/plan"><div><small>${istFokus(n.t) ? "🎯 Fokus · " : nebenbei ? "Nebenbei · " : ""}${esc(n.t.fach)} · Als Nächstes</small><b>${esc(n.s.titel)}</b></div><span class="pfeil">›</span></a>`
         : LM.themen.length ? `<p class="hand">Alles erledigt, was heute dran ist. Super! 🎉</p>${wartendeSchritte().map((w) => `<p class="leise">⏳ ${esc(w.t.fach)}: <b>${esc(w.s.titel)}</b> ist am ${datumLang(w.s.datum)} dran.</p>`).join("")}` : ""}
     ${briefKnopf()}
     ${ergebnisKnopf()}
@@ -409,7 +426,7 @@ function seiteStart() {
     ${themen.length ? `<div class="raster">${themen.map((t) => {
       const f = fortschritt(t), tb = t.klausur ? tageBis(t.klausur) : null;
       return `<a class="karte" href="#/t/${t.id}/plan">
-        <div><span class="chip c-${esc(t.farbe || "grau")}">${esc(t.fach)}</span></div>
+        <div><span class="chip c-${esc(t.farbe || "grau")}">${esc(t.fach)}</span>${istFokus(t) ? `<span class="chip">🎯 Fokus</span>` : ""}</div>
         <span class="titel">${esc(t.titel)}</span>
         ${t.klausur ? `<span>${tb < 0 ? "Klausur war am" : "Klausur:"} ${datumKurz(t.klausur)} · <span class="countdown ${tb <= 2 ? "bald" : ""}">${bisText(tb)}</span></span>` : `<span class="leise">Zum Üben</span>`}
         ${f.gesamt ? `<div class="balken"><span data-w="${f.prozent}"></span></div><small class="leise">${f.fertig} von ${f.gesamt} Schritten geschafft</small>` : ""}
