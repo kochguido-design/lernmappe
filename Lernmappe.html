@@ -1604,7 +1604,7 @@ function fotoOverlay(t, infoText, ort) {
 
 // ---------- Buchseiten für Papa: Material aus Schulbuch und Arbeitsblättern ----------
 // Wird nicht korrigiert. Das Google-Skript legt die Fotos im Unterordner „Buchseiten“ ab, Beschreibung beginnt mit „Buchseite“.
-const BUCH_FAECHER = ["Deutsch", "Mathe", "Englisch", "Natur und Technik", "Geografie", "Anderes"];
+const BUCH_FAECHER = ["Deutsch", "Mathe", "Englisch", "Natur und Technik", "Geografie", "Musik", "Religion", "Anderes"];
 function seiteBuch() {
   const direkt = !!(KIND.upload && KIND.upload.url);
   fotoListe.forEach((f) => URL.revokeObjectURL(f.url));
