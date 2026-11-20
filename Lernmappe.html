@@ -406,7 +406,7 @@ function linkZu(t, ziel) {
 // ---------- Startseite ----------
 function seiteStart() {
   const n = naechsterSchritt();
-  const themen = LM.themen.slice().sort((a, b) => (a.klausur || "9999").localeCompare(b.klausur || "9999"));
+  const themen = LM.themen.slice().sort((a, b) => (arbeitVorbei(a) - arbeitVorbei(b)) || (a.klausur || "9999").localeCompare(b.klausur || "9999"));
   const fokus = fokusThemen(), istFokus = (t) => fokus.indexOf(t) >= 0;
   const nebenbei = n && fokus.length && !istFokus(n.t);
   const fokusWartet = wartendeSchritte().filter((w) => istFokus(w.t));
@@ -880,16 +880,25 @@ function archivStart() {
 function wdhInhalt(e) {
   const t = thema(e.t);
   if (!t) return null;
-  if (e.art === "ueben") { const u = (t.uebungen || []).find((x) => x.id === e.ref), a = u && u.aufgaben[e.i]; return a ? { t, u, a } : null; }
-  if (e.art === "quiz") { const q = (t.quizze || []).find((x) => x.id === e.ref), f = q && q.fragen[e.i]; return f ? { t, q, f } : null; }
-  if (e.art === "karten") { const k = (t.karten || []).find((x) => x.id === e.ref), c = k && k.karten[e.i]; return c ? { t, k, c } : null; }
+  // alt: true = Stoff einer schon geschriebenen Arbeit (Valentinas Wunsch 20.11.2026): nicht mehr wiederholen
+  if (e.art === "ueben") { const u = (t.uebungen || []).find((x) => x.id === e.ref), a = u && !u.alt && u.aufgaben[e.i]; return a ? { t, u, a } : null; }
+  if (e.art === "quiz") { const q = (t.quizze || []).find((x) => x.id === e.ref), f = q && !q.alt && q.fragen[e.i]; return f ? { t, q, f } : null; }
+  if (e.art === "karten") { const k = (t.karten || []).find((x) => x.id === e.ref), c = k && !k.alt && k.karten[e.i]; return c ? { t, k, c } : null; }
   return null;
+}
+// Reihenfolge (Valentinas Wunsch 20.11.2026): erst Fehler aus den Fokus-Fächern, dann aus Fächern mit kommender Arbeit,
+// dann der Rest. Fehler aus einem Thema, dessen Arbeit schon geschrieben ist, kommen nicht mehr dran.
+const arbeitVorbei = (t) => !!(t && t.klausur && tageBis(t.klausur) < 0);
+function wdhRang(e) {
+  const t = thema(e.t);
+  if (fokusThemen().indexOf(t) >= 0) return 0;
+  return t && t.klausur ? 1 : 2;
 }
 function wdhFaellig() {
   const heute = heuteISO();
   return Object.keys(S.wdh || {}).map((k) => Object.assign({ key: k }, S.wdh[k]))
-    .filter((e) => e.faellig <= heute && wdhInhalt(e))
-    .sort((a, b) => a.faellig.localeCompare(b.faellig) || a.key.localeCompare(b.key));
+    .filter((e) => e.faellig <= heute && !arbeitVorbei(thema(e.t)) && wdhInhalt(e))
+    .sort((a, b) => wdhRang(a) - wdhRang(b) || a.faellig.localeCompare(b.faellig) || a.key.localeCompare(b.key));
 }
 const wdhHeute = () => wdhFaellig().slice(0, WDH_PRO_TAG);
 const wdhPflicht = () => S.wdhErledigt !== heuteISO() && wdhHeute().length > 0;
