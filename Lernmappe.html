@@ -390,6 +390,19 @@ function fokusThemen() {
   const erste = tageBis(kommend[0].klausur);
   return kommend.filter((t) => tageBis(t.klausur) - erste <= 7);
 }
+// Endspurt (Guidos Wunsch 20.11.2026): In den ENDSPURT_TAGE Tagen vor einer Arbeit gibt es nur dieses Fach.
+// Andere Fächer warten bis zum Tag der Arbeit, die Fehler-Wiederholung kommt nur aus dem Endspurt-Fach.
+// angedacht: true (Termin nicht bestätigt) = kein Endspurt.
+const ENDSPURT_TAGE = 3;
+function endspurtThemen() {
+  return LM.themen.filter((t) => t.klausur && !t.angedacht && tageBis(t.klausur) >= 1 && tageBis(t.klausur) <= ENDSPURT_TAGE)
+    .sort((a, b) => a.klausur.localeCompare(b.klausur));
+}
+function endspurtSperre(t) {
+  const e = endspurtThemen();
+  return e.length && e.indexOf(t) < 0 ? e[e.length - 1].klausur : null;
+}
+const endspurtName = () => endspurtThemen().map((t) => `${t.kurz || t.fach}-Arbeit am ${datumLang(t.klausur)}`).join(" und ");
 function wartendeSchritte() {
   return LM.themen.map((t) => { const i = aktuellerSchritt(t); return i >= 0 && wartetBis(t, i) ? { t, i, s: t.lernplan[i] } : null; }).filter(Boolean);
 }
@@ -410,7 +423,9 @@ function seiteStart() {
   const fokus = fokusThemen(), istFokus = (t) => fokus.indexOf(t) >= 0;
   const nebenbei = n && fokus.length && !istFokus(n.t);
   const fokusWartet = wartendeSchritte().filter((w) => istFokus(w.t));
-  const fokusZeile = fokus.length ? `<p class="fokus">🎯 <b>Dein Fokus:</b> ${fokus.map((t) => `${esc(t.kurz || t.fach)}-Arbeit am ${datumLang(t.klausur)} (${bisText(tageBis(t.klausur))})`).join(" und ")}</p>` : "";
+  const endspurt = endspurtThemen();
+  const fokusZeile = endspurt.length ? `<p class="fokus">🏁 <b>Endspurt:</b> ${esc(endspurtName())} (${bisText(tageBis(endspurt[0].klausur))}). Bis dahin lernst du nur dafür. Die anderen Fächer warten so lange.</p>`
+    : fokus.length ? `<p class="fokus">🎯 <b>Dein Fokus:</b> ${fokus.map((t) => `${esc(t.kurz || t.fach)}-Arbeit am ${datumLang(t.klausur)} (${bisText(tageBis(t.klausur))})`).join(" und ")}</p>` : "";
   app().innerHTML = `
     <div class="kopf">
       <div><p class="hand">Hallo ${esc(KIND.name)}!</p><h1>Meine Lernmappe</h1></div>
@@ -418,7 +433,8 @@ function seiteStart() {
     </div>
     ${wdhKnopf()}
     ${fokusZeile}
-    ${n ? `${nebenbei ? fokusWartet.map((w) => `<p class="leise">⏳ ${esc(w.t.fach)}: <b>${esc(w.s.titel)}</b> ist am ${datumLang(w.s.datum)} dran. Bis dahin kannst du nebenbei weitermachen:</p>`).join("") : ""}<a class="weiter${nebenbei ? " nebenbei" : ""}" href="#/t/${n.t.id}/plan"><div><small>${istFokus(n.t) ? "🎯 Fokus · " : nebenbei ? "Nebenbei · " : ""}${esc(n.t.fach)} · Als Nächstes</small><b>${esc(n.s.titel)}</b></div><span class="pfeil">›</span></a>`
+    ${n ? `${nebenbei ? fokusWartet.map((w) => `<p class="leise">⏳ ${esc(w.t.fach)}: <b>${esc(w.s.titel)}</b> ist am ${datumLang(w.s.datum)} dran. Bis dahin kannst du nebenbei weitermachen:</p>`).join("") : ""}<a class="weiter${nebenbei ? " nebenbei" : ""}" href="#/t/${n.t.id}/plan"><div><small>${endspurt.indexOf(n.t) >= 0 ? "🏁 Endspurt · " : istFokus(n.t) ? "🎯 Fokus · " : nebenbei ? "Nebenbei · " : ""}${esc(n.t.fach)} · Als Nächstes</small><b>${esc(n.s.titel)}</b></div><span class="pfeil">›</span></a>`
+        : endspurt.length ? `<p class="hand">Für heute ist dein Endspurt-Plan geschafft. Super! 🎉</p><p class="leise">Wenn du magst: Wiederhol deine Fehler oder mach freiwillige Extras in ${endspurt.map((t) => `<a href="#/t/${t.id}/ueben">${esc(t.kurz || t.fach)}</a>`).join(" und ")}.</p>${wartendeSchritte().filter((w) => endspurt.indexOf(w.t) >= 0).map((w) => `<p class="leise">⏳ ${esc(w.t.fach)}: <b>${esc(w.s.titel)}</b> ist am ${datumLang(w.s.datum)} dran.</p>`).join("")}`
         : LM.themen.length ? `<p class="hand">Alles erledigt, was heute dran ist. Super! 🎉</p>${wartendeSchritte().map((w) => `<p class="leise">⏳ ${esc(w.t.fach)}: <b>${esc(w.s.titel)}</b> ist am ${datumLang(w.s.datum)} dran.</p>`).join("")}` : ""}
     ${briefKnopf()}
     ${ergebnisKnopf()}
@@ -463,11 +479,14 @@ function aktuellerSchritt(t) {
 // Generalprobe (2 Tage vorher) und letzter Tag vor einer Klassenarbeit gehen erst an ihrem Datum auf,
 // auch wenn das Kind vorher mit allem fertig ist. Mit fest: true gilt das für jeden datierten Schritt.
 function wartetBis(t, i) {
+  const sperre = endspurtSperre(t);
+  if (sperre && (t.lernplan || [])[i]) return sperre;
   const s = (t.lernplan || [])[i];
   if (!s || !s.datum || heuteISO() >= s.datum) return null;
   return s.fest || (t.klausur && s.datum >= plusTage(t.klausur, -2) && s.datum < t.klausur) ? s.datum : null;
 }
-const wartetText = (t, i) => /generalprobe/i.test(t.lernplan[i].titel)
+const wartetText = (t, i) => endspurtSperre(t) ? `Gerade ist Endspurt für die ${endspurtName()}. 🏁 Bis dahin lernst du nur dafür, hier geht es danach weiter.`
+  : /generalprobe/i.test(t.lernplan[i].titel)
   ? "Die Generalprobe schreibst du genau zwei Tage vor der Arbeit. Dann ist alles frisch im Kopf."
   : "Dieser Tag ist für kurz vor der Arbeit gedacht. Dann ist alles frisch im Kopf.";
 function stufe(t, i) {
@@ -593,6 +612,9 @@ function seitePlan(t) {
     <div class="balken"><span data-w="${f.prozent}"></span></div><p class="leise klein">${f.fertig} von ${f.gesamt} Tagen geschafft</p>
     ${cur < 0 && plan.length ? `<p class="hand">Du hast alle Tage geschafft! 🏆</p>` : ""}
     ${plan.map((s, i) => {
+      if (i === cur && endspurtSperre(t)) return `<div class="schritt jetzt" id="jetzt"><span class="jetzt-etikett">Ab ${datumKurz(endspurtSperre(t))}</span>
+        <div class="stitel">${titelZeile(s, i)}</div>
+        <div class="erkl"><b>🏁 Endspurt!</b><br>${esc(wartetText(t, i))}</div></div>`;
       if (i === cur && wartetBis(t, i)) return `<div class="schritt jetzt" id="jetzt"><span class="jetzt-etikett">Ab ${datumKurz(s.datum)}</span>
         <div class="stitel">${titelZeile(s, i)}</div>
         <div class="erkl gut"><b>Du bist dem Plan voraus! 🚀</b><br>Alles davor hast du schon geschafft. ${esc(wartetText(t, i))} Bis dahin kannst du deine Fehler wiederholen, freiwillige Extras machen oder in einem anderen Fach weiterlernen.</div></div>`;
@@ -903,6 +925,8 @@ function wdhFaellig() {
     .sort((a, b) => wdhRang(a) - wdhRang(b) || a.faellig.localeCompare(b.faellig) || a.key.localeCompare(b.key));
 }
 function wdhHeute() {
+  const endspurt = endspurtThemen();
+  if (endspurt.length) return wdhFaellig().filter((e) => endspurt.indexOf(thema(e.t)) >= 0).slice(0, WDH_PRO_TAG);
   const alle = wdhFaellig(), neu = alle.filter((e) => wdhRang(e) < 3), alt = alle.filter((e) => wdhRang(e) === 3);
   const n = neu.slice(0, WDH_PRO_TAG - Math.min(WDH_ALT_PRO_TAG, alt.length));
   return n.concat(alt.slice(0, WDH_PRO_TAG - n.length));
