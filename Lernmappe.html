@@ -880,27 +880,33 @@ function archivStart() {
 function wdhInhalt(e) {
   const t = thema(e.t);
   if (!t) return null;
-  // alt: true = Stoff einer schon geschriebenen Arbeit (Valentinas Wunsch 20.11.2026): nicht mehr wiederholen
-  if (e.art === "ueben") { const u = (t.uebungen || []).find((x) => x.id === e.ref), a = u && !u.alt && u.aufgaben[e.i]; return a ? { t, u, a } : null; }
-  if (e.art === "quiz") { const q = (t.quizze || []).find((x) => x.id === e.ref), f = q && !q.alt && q.fragen[e.i]; return f ? { t, q, f } : null; }
-  if (e.art === "karten") { const k = (t.karten || []).find((x) => x.id === e.ref), c = k && !k.alt && k.karten[e.i]; return c ? { t, k, c } : null; }
+  if (e.art === "ueben") { const u = (t.uebungen || []).find((x) => x.id === e.ref), a = u && u.aufgaben[e.i]; return a ? { t, u, a, alt: !!u.alt } : null; }
+  if (e.art === "quiz") { const q = (t.quizze || []).find((x) => x.id === e.ref), f = q && q.fragen[e.i]; return f ? { t, q, f, alt: !!q.alt } : null; }
+  if (e.art === "karten") { const k = (t.karten || []).find((x) => x.id === e.ref), c = k && k.karten[e.i]; return c ? { t, k, c, alt: !!k.alt } : null; }
   return null;
 }
-// Reihenfolge (Valentinas Wunsch 20.11.2026): erst Fehler aus den Fokus-Fächern, dann aus Fächern mit kommender Arbeit,
-// dann der Rest. Fehler aus einem Thema, dessen Arbeit schon geschrieben ist, kommen nicht mehr dran.
+// Reihenfolge (Valentinas und Guidos Wunsch 20.11.2026): Der neue Stoff hat Vorrang. Erst Fehler aus den Fokus-Fächern,
+// dann aus Fächern mit kommender Arbeit, dann der Rest. Fehler aus schon geschriebenen Arbeiten (vergangenes klausur oder
+// Inhalt mit alt: true) kommen „immer wieder mal“: höchstens WDH_ALT_PRO_TAG pro Tag, mehr nur, wenn sonst nichts fällig ist.
+const WDH_ALT_PRO_TAG = 2;
 const arbeitVorbei = (t) => !!(t && t.klausur && tageBis(t.klausur) < 0);
 function wdhRang(e) {
-  const t = thema(e.t);
+  const t = thema(e.t), x = wdhInhalt(e);
+  if (arbeitVorbei(t) || (x && x.alt)) return 3;
   if (fokusThemen().indexOf(t) >= 0) return 0;
   return t && t.klausur ? 1 : 2;
 }
 function wdhFaellig() {
   const heute = heuteISO();
   return Object.keys(S.wdh || {}).map((k) => Object.assign({ key: k }, S.wdh[k]))
-    .filter((e) => e.faellig <= heute && !arbeitVorbei(thema(e.t)) && wdhInhalt(e))
+    .filter((e) => e.faellig <= heute && wdhInhalt(e))
     .sort((a, b) => wdhRang(a) - wdhRang(b) || a.faellig.localeCompare(b.faellig) || a.key.localeCompare(b.key));
 }
-const wdhHeute = () => wdhFaellig().slice(0, WDH_PRO_TAG);
+function wdhHeute() {
+  const alle = wdhFaellig(), neu = alle.filter((e) => wdhRang(e) < 3), alt = alle.filter((e) => wdhRang(e) === 3);
+  const n = neu.slice(0, WDH_PRO_TAG - Math.min(WDH_ALT_PRO_TAG, alt.length));
+  return n.concat(alt.slice(0, WDH_PRO_TAG - n.length));
+}
 const wdhPflicht = () => S.wdhErledigt !== heuteISO() && wdhHeute().length > 0;
 // Jedes Fach mit Klassenarbeit: Am Tag davor gehört der große Fehler-Check in den Lernplan.
 function fehlerCheckEinbauen() {
@@ -911,7 +917,7 @@ function fehlerCheckEinbauen() {
       (s.aufgaben = s.aufgaben || []).unshift({ text: "🔁 **Großer Fehler-Check:** Alle deine Fehler aus diesem Fach noch einmal, bis jeder sitzt", ziel: "fehlercheck" });
   });
 }
-const fehlerVon = (t) => Object.keys(S.fehlerArchiv || {}).map((k) => Object.assign({ key: k }, S.fehlerArchiv[k])).filter((e) => e.t === t.id && wdhInhalt(e));
+const fehlerVon = (t) => Object.keys(S.fehlerArchiv || {}).map((k) => Object.assign({ key: k }, S.fehlerArchiv[k])).filter((e) => { const x = e.t === t.id && wdhInhalt(e); return x && !x.alt; });
 // Einmalig beim ersten Start mit dieser Funktion: bisherige Fehler aus Übungen und Karteikarten übernehmen
 function wdhStart() {
   if (S.wdhStart) return;
