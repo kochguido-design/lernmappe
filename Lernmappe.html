@@ -393,14 +393,17 @@ function fokusThemen() {
 // Endspurt (Guidos Wunsch 20.11.2026): In den ENDSPURT_TAGE Tagen vor einer Arbeit gibt es nur dieses Fach.
 // Andere Fächer warten bis zum Tag der Arbeit, die Fehler-Wiederholung kommt nur aus dem Endspurt-Fach.
 // angedacht: true (Termin nicht bestätigt) = kein Endspurt.
-const ENDSPURT_TAGE = 3;
+const ENDSPURT_TAGE = 4;
 function endspurtThemen() {
   return LM.themen.filter((t) => t.klausur && !t.angedacht && tageBis(t.klausur) >= 1 && tageBis(t.klausur) <= ENDSPURT_TAGE)
     .sort((a, b) => a.klausur.localeCompare(b.klausur));
 }
 function endspurtSperre(t) {
   const e = endspurtThemen();
-  return e.length && e.indexOf(t) < 0 ? e[e.length - 1].klausur : null;
+  if (!e.length || e.indexOf(t) >= 0) return null;
+  // Frei ab dem Tag der letzten Endspurt-Arbeit, oder schon ab dem eigenen Endspurt, wenn der früher beginnt.
+  const frei = e[e.length - 1].klausur, eigen = t.klausur && !t.angedacht && tageBis(t.klausur) > 0 ? plusTage(t.klausur, -ENDSPURT_TAGE) : null;
+  return eigen && eigen < frei ? eigen : frei;
 }
 const endspurtName = () => endspurtThemen().map((t) => `${t.kurz || t.fach}-Arbeit am ${datumLang(t.klausur)}`).join(" und ");
 function wartendeSchritte() {
