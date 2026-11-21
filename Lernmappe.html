@@ -393,17 +393,27 @@ function fokusThemen() {
 // Endspurt (Guidos Wunsch 20.11.2026): In den ENDSPURT_TAGE Tagen vor einer Arbeit gibt es nur dieses Fach.
 // Andere Fächer warten bis zum Tag der Arbeit, die Fehler-Wiederholung kommt nur aus dem Endspurt-Fach.
 // angedacht: true (Termin nicht bestätigt) = kein Endspurt.
+// Seit 21.11.2026 je Fach eigene Länge (endspurt: N im Thema, sonst ENDSPURT_TAGE). Themen mit immerDabei: true
+// (Mathe) laufen auch im Endspurt anderer Fächer in kleinen Schritten weiter und haben vor ihrer eigenen Arbeit den Fokus.
 const ENDSPURT_TAGE = 4;
+const endspurtTage = (t) => t.endspurt || ENDSPURT_TAGE;
 function endspurtThemen() {
-  return LM.themen.filter((t) => t.klausur && !t.angedacht && tageBis(t.klausur) >= 1 && tageBis(t.klausur) <= ENDSPURT_TAGE)
+  return LM.themen.filter((t) => t.klausur && !t.angedacht && tageBis(t.klausur) >= 1 && tageBis(t.klausur) <= endspurtTage(t))
     .sort((a, b) => a.klausur.localeCompare(b.klausur));
 }
 function endspurtSperre(t) {
   const e = endspurtThemen();
-  if (!e.length || e.indexOf(t) >= 0) return null;
+  if (!e.length || e.indexOf(t) >= 0 || t.immerDabei) return null;
   // Frei ab dem Tag der letzten Endspurt-Arbeit, oder schon ab dem eigenen Endspurt, wenn der früher beginnt.
-  const frei = e[e.length - 1].klausur, eigen = t.klausur && !t.angedacht && tageBis(t.klausur) > 0 ? plusTage(t.klausur, -ENDSPURT_TAGE) : null;
+  const frei = e[e.length - 1].klausur, eigen = t.klausur && !t.angedacht && tageBis(t.klausur) > 0 ? plusTage(t.klausur, -endspurtTage(t)) : null;
   return eigen && eigen < frei ? eigen : frei;
+}
+// Immer-dabei-Themen außerhalb ihres eigenen Endspurts, deren aktueller Schritt heute dran ist.
+function dabeiSchritte() {
+  const e = endspurtThemen(), heute = heuteISO();
+  return LM.themen.filter((t) => t.immerDabei && e.indexOf(t) < 0 && (!t.klausur || tageBis(t.klausur) >= 0))
+    .map((t) => { const i = aktuellerSchritt(t), s = i >= 0 ? t.lernplan[i] : null;
+      return s && !wartetBis(t, i) && (!s.datum || s.datum <= heute) ? { t, i, s } : null; }).filter(Boolean);
 }
 const endspurtName = () => endspurtThemen().map((t) => `${t.kurz || t.fach}-Arbeit am ${datumLang(t.klausur)}`).join(" und ");
 function wartendeSchritte() {
@@ -427,7 +437,10 @@ function seiteStart() {
   const nebenbei = n && fokus.length && !istFokus(n.t);
   const fokusWartet = wartendeSchritte().filter((w) => istFokus(w.t));
   const endspurt = endspurtThemen();
-  const fokusZeile = endspurt.length ? `<p class="fokus">🏁 <b>Endspurt:</b> ${esc(endspurtName())} (${bisText(tageBis(endspurt[0].klausur))}). Bis dahin lernst du nur dafür. Die anderen Fächer warten so lange.</p>`
+  const dabei = dabeiSchritte().filter((d) => !n || d.t !== n.t);
+  const dabeiNamen = LM.themen.filter((t) => t.immerDabei && endspurt.indexOf(t) < 0 && t.klausur && tageBis(t.klausur) >= 0).map((t) => t.kurz || t.fach).join(" und ");
+  const dabeiKnopf = dabei.map((d) => `<a class="weiter nebenbei" href="#/t/${d.t.id}/plan"><div><small>➕ Zwischendurch · ${esc(d.t.fach)}</small><b>${esc(d.s.titel)}</b></div><span class="pfeil">›</span></a>`).join("");
+  const fokusZeile = endspurt.length ? `<p class="fokus">🏁 <b>Endspurt:</b> ${esc(endspurtName())} (${bisText(tageBis(endspurt[0].klausur))}). Bis dahin lernst du nur dafür. Die anderen Fächer warten so lange${dabeiNamen ? `, nur ${esc(dabeiNamen)} läuft in kleinen Schritten weiter` : ""}.</p>`
     : fokus.length ? `<p class="fokus">🎯 <b>Dein Fokus:</b> ${fokus.map((t) => `${esc(t.kurz || t.fach)}-Arbeit am ${datumLang(t.klausur)} (${bisText(tageBis(t.klausur))})`).join(" und ")}</p>` : "";
   app().innerHTML = `
     <div class="kopf">
@@ -439,6 +452,7 @@ function seiteStart() {
     ${n ? `${nebenbei ? fokusWartet.map((w) => `<p class="leise">⏳ ${esc(w.t.fach)}: <b>${esc(w.s.titel)}</b> ist am ${datumLang(w.s.datum)} dran. Bis dahin kannst du nebenbei weitermachen:</p>`).join("") : ""}<a class="weiter${nebenbei ? " nebenbei" : ""}" href="#/t/${n.t.id}/plan"><div><small>${endspurt.indexOf(n.t) >= 0 ? "🏁 Endspurt · " : istFokus(n.t) ? "🎯 Fokus · " : nebenbei ? "Nebenbei · " : ""}${esc(n.t.fach)} · Als Nächstes</small><b>${esc(n.s.titel)}</b></div><span class="pfeil">›</span></a>`
         : endspurt.length ? `<p class="hand">Für heute ist dein Endspurt-Plan geschafft. Super! 🎉</p><p class="leise">Wenn du magst: Wiederhol deine Fehler oder mach freiwillige Extras in ${endspurt.map((t) => `<a href="#/t/${t.id}/ueben">${esc(t.kurz || t.fach)}</a>`).join(" und ")}.</p>${wartendeSchritte().filter((w) => endspurt.indexOf(w.t) >= 0).map((w) => `<p class="leise">⏳ ${esc(w.t.fach)}: <b>${esc(w.s.titel)}</b> ist am ${datumLang(w.s.datum)} dran.</p>`).join("")}`
         : LM.themen.length ? `<p class="hand">Alles erledigt, was heute dran ist. Super! 🎉</p>${wartendeSchritte().map((w) => `<p class="leise">⏳ ${esc(w.t.fach)}: <b>${esc(w.s.titel)}</b> ist am ${datumLang(w.s.datum)} dran.</p>`).join("")}` : ""}
+    ${dabeiKnopf}
     ${briefKnopf()}
     ${ergebnisKnopf()}
     <h2>Meine Themen</h2>
@@ -914,6 +928,7 @@ function wdhInhalt(e) {
 // dann aus Fächern mit kommender Arbeit, dann der Rest. Fehler aus schon geschriebenen Arbeiten (vergangenes klausur oder
 // Inhalt mit alt: true) kommen „immer wieder mal“: höchstens WDH_ALT_PRO_TAG pro Tag, mehr nur, wenn sonst nichts fällig ist.
 const WDH_ALT_PRO_TAG = 2;
+const WDH_DABEI_PRO_TAG = 2; // im Endspurt anderer Fächer: so viele Fehler aus Immer-dabei-Themen (Mathe)
 const arbeitVorbei = (t) => !!(t && t.klausur && tageBis(t.klausur) < 0);
 function wdhRang(e) {
   const t = thema(e.t), x = wdhInhalt(e);
@@ -929,7 +944,12 @@ function wdhFaellig() {
 }
 function wdhHeute() {
   const endspurt = endspurtThemen();
-  if (endspurt.length) return wdhFaellig().filter((e) => endspurt.indexOf(thema(e.t)) >= 0).slice(0, WDH_PRO_TAG);
+  if (endspurt.length) {
+    const f = wdhFaellig(), es = f.filter((e) => endspurt.indexOf(thema(e.t)) >= 0),
+      dabei = f.filter((e) => { const t = thema(e.t); return t && t.immerDabei && endspurt.indexOf(t) < 0 && wdhRang(e) < 3; });
+    const n = es.slice(0, WDH_PRO_TAG - Math.min(WDH_DABEI_PRO_TAG, dabei.length));
+    return n.concat(dabei.slice(0, Math.min(WDH_DABEI_PRO_TAG, WDH_PRO_TAG - n.length)));
+  }
   const alle = wdhFaellig(), neu = alle.filter((e) => wdhRang(e) < 3), alt = alle.filter((e) => wdhRang(e) === 3);
   const n = neu.slice(0, WDH_PRO_TAG - Math.min(WDH_ALT_PRO_TAG, alt.length));
   return n.concat(alt.slice(0, WDH_PRO_TAG - n.length));
